@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="知岛——语文、英语、数学互动知识讲解应用">
+  <meta name="theme-color" content="#7568d8">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="知岛">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <title>知岛 · 让知识有画面</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="mascot.css?v=20261112e">
+  <link rel="stylesheet" href="identity.css">
+  <link rel="stylesheet" href="pwa.css?v=20261110a">
+  <link rel="stylesheet" href="knowledge.css?v=20261111a">
+</head>
+<body>
+  <svg class="svg-sprite" aria-hidden="true">
+    <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="m12 3-1.4 4.2a5 5 0 0 1-3.2 3.2L3 12l4.4 1.6a5 5 0 0 1 3.2 3.2L12 21l1.4-4.2a5 5 0 0 1 3.2-3.2L21 12l-4.4-1.6a5 5 0 0 1-3.2-3.2L12 3Z"/><path d="M5 3v4M3 5h4M19 17v4M17 19h4"/></symbol>
+    <symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5 5-2Z"/></symbol>
+    <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="M6 4.8A1.8 1.8 0 0 1 7.8 3h8.4A1.8 1.8 0 0 1 18 4.8V21l-6-3.8L6 21V4.8Z"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-flame" viewBox="0 0 24 24"><path d="M12 22c4 0 7-2.8 7-7 0-3.4-2-6.4-5.5-9.5.2 3-1.3 4.4-2.2 5.1.2-3.8-2.1-6.6-3.8-8.1.2 4.1-2.5 6.4-2.5 10.2C5 18 8 22 12 22Z"/><path d="M9.5 17.5c0 2 1.2 3.2 2.7 3.2s2.6-1.2 2.6-3.1c0-1.5-.8-2.7-1.9-3.9-.2 1.2-.8 1.8-1.3 2.1-.2-1.4-1-2.3-1.7-2.9.1 2-.4 2.8-.4 4.6Z"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.2 4.2"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M14 7l5 5-5 5"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5v-16ZM20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5v-16Z"/></symbol>
+    <symbol id="i-language" viewBox="0 0 24 24"><path d="M4 5h10M9 3v2M6 5c.6 5.2 3.4 8.5 7 10M13 5c-.8 4.5-4.1 8-8 10M14 20l3.5-9 3.5 9M15.2 17h4.6"/></symbol>
+    <symbol id="i-math" viewBox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h2M8 12h2M8 16h2M14 8h3M14 12h3M14 16h3"/></symbol>
+    <symbol id="i-bulb" viewBox="0 0 24 24"><path d="M8.5 15.5C7 14.4 6 12.8 6 11a6 6 0 0 1 12 0c0 1.8-1 3.4-2.5 4.5-.7.5-1 1.1-1 1.5h-5c0-.4-.3-1-1-1.5Z"/><path d="M9.5 20h5M12 2V.5M4.2 4.2 3 3M19.8 4.2 21 3"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4.2 4.2L19 6.5"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-volume" viewBox="0 0 24 24"><path d="M5 10v4h3l4 4V6L8 10H5ZM16 9c1.5 1.7 1.5 4.3 0 6M18.5 6.5c3 3 3 8 0 11"/></symbol>
+    <symbol id="i-share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 10.8 7.5-4.4M8.2 13.2l7.5 4.4"/></symbol>
+    <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+    <symbol id="i-pen" viewBox="0 0 24 24"><path d="m14 5 5 5M4 20l3.5-.7L20 6.8 16.2 3 3.7 15.5 3 19l1 1Z"/></symbol>
+    <symbol id="i-quote" viewBox="0 0 24 24"><path d="M5 11h5v7H3v-5c0-5 2-8 7-9M16 11h5v7h-7v-5c0-5 2-8 7-9"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+    <symbol id="i-crown" viewBox="0 0 24 24"><path d="m3 7 4.5 4L12 4l4.5 7L21 7l-2 11H5L3 7ZM5 21h14"/></symbol>
+    <symbol id="i-brain" viewBox="0 0 24 24"><path d="M9.5 4.5A3.5 3.5 0 0 0 6 8c0 .3 0 .5.1.8A3.8 3.8 0 0 0 4 15a4 4 0 0 0 5.5 4.5M14.5 4.5A3.5 3.5 0 0 1 18 8c0 .3 0 .5-.1.8A3.8 3.8 0 0 1 20 15a4 4 0 0 1-5.5 4.5M12 3v18M8 9c2 0 3 1 4 2M16 9c-2 0-3 1-4 2M8 16c1.5 0 2.5-.5 4-2M16 16c-1.5 0-2.5-.5-4-2"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 3h6l1 4H8l1-4ZM6 7l1 14h10l1-14M10 11v6M14 11v6"/></symbol>
+    <symbol id="i-face" viewBox="0 0 24 24"><path d="M4 8V5a1 1 0 0 1 1-1h3M20 8V5a1 1 0 0 0-1-1h-3M4 16v3a1 1 0 0 0 1 1h3M20 16v3a1 1 0 0 1-1 1h-3M9 10v2M15 10v2M8.5 14.5a4.5 4.5 0 0 0 7 0"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 5.5a3 3 0 0 1 0 5.6M17 14a5 5 0 0 1 3.5 5"/></symbol>
+  </svg>
+
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="#" aria-label="知岛首页">
+        <span class="zd-brand-mark"><span class="zd-host" data-zd-host data-zd-size="brand" data-zd-chat></span></span>
+        <span><strong>知岛</strong><small>让知识有画面</small></span>
+      </a>
+      <nav class="side-nav" aria-label="主导航">
+        <p class="nav-label">学习空间</p>
+        <button class="nav-item active" data-panel="explore"><svg><use href="#i-compass"></use></svg><span>探索学习</span><i class="nav-dot"></i></button>
+        <button class="nav-item" data-panel="favorites"><svg><use href="#i-bookmark"></use></svg><span>我的收藏</span><b id="favorite-count">0</b></button>
+        <button class="nav-item" data-panel="history"><svg><use href="#i-clock"></use></svg><span>学习记录</span></button>
+        <button class="nav-item" id="knowledge-entry"><svg><use href="#i-brain"></use></svg><span>知识库</span><span class="zk-entry-count">家长</span></button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="daily-card">
+          <div class="daily-icon"><svg><use href="#i-target"></use></svg></div>
+          <p>今日小目标</p>
+          <strong>弄懂 3 个知识点</strong>
+          <div class="goal-row"><div class="goal-track"><span id="goal-progress"></span></div><b id="goal-text">1/3</b></div>
+          <small>每一点好奇，都值得回应</small>
+        </div>
+        <div class="profile"><span class="avatar" id="profile-avatar">知</span><div><strong id="profile-name">同学，你好</strong><small id="profile-sub">保持好奇，天天进步</small></div><span class="online-dot"></span></div>
+      </div>
+    </aside>
+    <div class="sidebar-mask" id="sidebar-mask"></div>
+
+    <main class="main-area">
+      <header class="topbar">
+        <div class="topbar-left"><button class="icon-button mobile-menu" id="mobile-menu" aria-label="打开菜单"><svg><use href="#i-menu"></use></svg></button><span>学习空间</span><svg class="tiny-chevron"><use href="#i-chevron"></use></svg><strong>互动讲解</strong></div>
+        <div class="topbar-right"><span class="streak"><svg><use href="#i-flame"></use></svg>连续学习 <b>7</b> 天</span><label class="learner-picker" title="按年级调整讲解深度与界面"><svg><use href="#i-users"></use></svg><select id="learner-grade" aria-label="选择学习者年级"><option value="">通用</option></select><span class="learner-hint" id="learner-hint"></span></label><button class="id-entry" id="id-entry" type="button"><span class="avatar">知</span><span class="id-entry-name" id="id-entry-name">登录</span><svg><use href="#i-chevron"></use></svg></button><button class="guide-button" id="zd-top-editor"><svg><use href="#i-pen"></use></svg>形象工坊</button><button class="guide-button" id="guide-button"><svg><use href="#i-bulb"></use></svg>使用指南</button></div>
+      </header>
+
+      <div class="content-wrap" id="explore-page">
+        <section class="hero">
+          <div class="hero-copy"><span class="eyebrow"><i></i> YOUR CURIOSITY MATTERS</span><h1>今天，想弄懂<span>什么？</span></h1><p>输入一个词、一组语法或一道数学题，知岛为你找到更清晰的讲解方式。</p></div>
+          <div class="hero-doodle" aria-hidden="true"><span class="doodle-star">✦</span><span class="doodle-loop"></span><span class="doodle-note">好奇心<br>是起点</span></div>
+        </section>
+
+        <section class="search-card" aria-label="知识点搜索">
+          <div class="search-main"><svg class="search-icon"><use href="#i-search"></use></svg><input id="topic-input" type="text" autocomplete="off" placeholder="试试「开心」「play / do / go」或一道方程…" aria-label="输入想学习的内容"><span class="detect-chip" id="detect-chip"><i></i><span>自动识别学科</span></span><button class="start-button" id="start-button">开始讲解<svg><use href="#i-arrow"></use></svg></button></div>
+          <div class="quick-row"><span>快速体验</span><button data-topic="开心"><i class="subject-dot chinese"></i>语文 · 开心</button><button data-topic="play / do / go"><i class="subject-dot english"></i>英语 · play / do / go</button><button data-topic="x² - 5x + 6 = 0"><i class="subject-dot math"></i>数学 · 一元二次方程</button></div>
+          <div class="model-row">
+            <span class="model-row-label">生成模型</span>
+            <div class="model-switch" id="model-switch" role="group" aria-label="选择生成模型"><button type="button" data-model-provider="liquid" class="active">Liquid LFM3 <small>lfm3-1.7b</small></button><button type="button" data-model-provider="qwen">Qwen <small>qwen-plus</small></button></div>
+            <label class="strict-toggle" title="只用所选模型生成，不再自动切换备用模型"><input type="checkbox" id="strict-model-toggle">仅用所选模型</label>
+            <span class="model-metrics" id="model-metrics">默认 Liquid · 可随时切换</span>
+          </div>
+        </section>
+
+        <section class="lesson-section" id="lesson-section">
+          <div class="section-heading"><div><span class="section-kicker">为你讲解</span><h2 id="lesson-heading">一个词，也能写出画面感</h2><span class="cache-badge" id="cache-badge" hidden>已缓存 · 秒开</span><span class="model-badge" id="model-badge" hidden></span><span class="timing-badge" id="timing-badge" hidden></span></div><div class="lesson-actions"><button class="soft-button" id="refresh-button" hidden title="忽略缓存，重新生成这节课"><svg><use href="#i-refresh"></use></svg><span>重新生成</span></button><button class="soft-button" id="share-button"><svg><use href="#i-share"></use></svg><span>分享</span></button><button class="soft-button" id="favorite-button"><svg><use href="#i-bookmark"></use></svg><span>收藏</span></button></div></div>
+          <div id="lesson-content"></div>
+        </section>
+        <section class="pipeline-panel" id="pipeline-panel" aria-label="生成进度">
+          <div class="pipeline-head"><div><span class="section-kicker">GENERATION PIPELINE</span><h3>生成进度 <small>两步依次计时</small></h3></div><div class="pipeline-total"><span id="pipeline-total-label">尚未生成</span><b id="pipeline-total-time">—</b></div></div>
+          <div class="pipeline-stages">
+            <article class="pipeline-stage route" data-stage="route" data-status="idle"><div class="pipeline-stage-top"><span class="pipeline-index">01</span><div class="pipeline-stage-name"><strong>学科决策</strong><small id="pipeline-route-model">判断学科类型</small></div></div><div class="pipeline-stage-bottom"><span class="pipeline-status" id="pipeline-route-status">等待开始</span><b class="pipeline-time" id="pipeline-route-time">—</b><div class="pipeline-track"><span id="pipeline-route-bar"></span></div></div></article>
+            <article class="pipeline-stage lesson" data-stage="lesson" data-status="idle"><div class="pipeline-stage-top"><span class="pipeline-index">02</span><div class="pipeline-stage-name"><strong>讲解分析</strong><small id="pipeline-lesson-model">生成讲解内容</small></div></div><div class="pipeline-stage-bottom"><span class="pipeline-status" id="pipeline-lesson-status">等待开始</span><b class="pipeline-time" id="pipeline-lesson-time">—</b><div class="pipeline-track"><span id="pipeline-lesson-bar"></span></div></div></article>
+          </div>
+          <p class="pipeline-note" id="pipeline-note">先判断学科，再生成讲解，两步分别计时。</p>
+        </section>
+        <footer class="page-footer"><span><svg><use href="#i-sparkles"></use></svg>不急着记住，先真正理解。</span><small>知岛 · 互动知识讲解</small></footer>
+      </div>
+    </main>
+  </div>
+
+  <div class="zd-dock" id="zd-dock">
+    <div class="zd-dock-bubble"><b>知知说</b><span id="zd-dock-line">你好，我是知知！今天想先弄懂哪一个知识点？</span></div>
+    <div class="zd-dock-card">
+      <div class="zd-dock-head"><strong id="zd-dock-name">知知</strong><button type="button" id="zd-edit-button">编辑形象</button></div>
+      <span class="zd-subject-tag" id="zd-subject-tag">语文 · 表达素材</span>
+      <div class="zd-host" data-zd-host data-zd-size="dock" data-zd-chat></div>
+      <div class="zd-dock-actions"><span class="zd-action-label" id="zd-action-label">待机 · 轻轻呼吸</span><button type="button" id="zd-toggle-dock">收起</button><button type="button" data-zd-open-editor>换装</button></div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="modal-backdrop" hidden>
+    <section class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <header><div><span class="section-kicker" id="modal-kicker">我的学习</span><h2 id="modal-title">我的收藏</h2></div><button class="icon-button" id="modal-close" aria-label="关闭"><svg><use href="#i-close"></use></svg></button></header>
+      <div class="modal-body" id="modal-body"></div>
+    </section>
+  </div>
+  <div class="toast" id="toast" role="status"><svg><use href="#i-check"></use></svg><span></span></div>
+  <script src="config.js"></script>
+  <script src="api-config.js"></script>
+  <script src="grade-profile.js?v=20261111a"></script>
+  <script src="feedback.js?v=20261111a"></script>
+  <script src="a2ui-catalog.js?v=20261112b"></script>
+  <script src="a2ui-matrix.js?v=20261112b"></script>
+  <script src="a2ui-question-map.js?v=20261112b"></script>
+  <script src="a2ui-p4a.js?v=20261112b"></script>
+  <script src="a2ui-p4b.js?v=20261112b"></script>
+  <script src="a2ui-p4c.js?v=20261112b"></script>
+  <script src="a2ui-p4d.js?v=20261112b"></script>
+  <script src="a2ui-games.js?v=20261112b"></script>
+  <script src="a2ui-compiler.js?v=20261112b"></script>
+  <script src="a2ui-render.js?v=20261112e"></script>
+  <script src="a2ui-play.js?v=20261112b"></script>
+  <script src="a2ui-stream.js?v=20261112c"></script>
+  <script src="a2ui-bridge.js?v=20261112b"></script>
+  <script src="voice.js?v=20261112e"></script>
+  <script src="app.js?v=20261112e"></script>
+  <script src="face.js?v=20261112c"></script>
+  <script src="identity.js?v=20261112c"></script>
+  <script src="identity-ui.js?v=20261110a"></script>
+  <script src="learner.js?v=20261111a"></script>
+  <script src="knowledge-client.js?v=20261111a"></script>
+  <script src="dynamic.js?v=20261112b"></script>
+  <script src="mascot.js?v=20261112e"></script>
+  <script src="mascot-chat.js?v=20261112e"></script>
+  <script src="pwa.js?v=20261110a"></script>
+  <script>
+    // 主应用已初始化完成后再启动增强层：年级形态 → 反馈语气 → 卡片墙入口。
+    (function bootstrapEnhancements() {
+      try { window.ZHIDAO_FEEDBACK?.init(); } catch (e) { console.warn('[feedback]', e); }
+      window.LEARNER?.init().catch?.(() => {});
+      try { window.KNOWLEDGE?.init(); } catch (e) { console.warn('[knowledge]', e); }
+      // 切换年级后按新年级重新生成当前课程，避免内容停留在上一档。
+      window.addEventListener('zhidao:learnerrefresh', () => {
+        const value = document.getElementById('topic-input')?.value?.trim();
+        if (value && typeof window.startLesson === 'function') window.startLesson(true);
+      });
+    })();
+  </script>
+</body>
+</html>

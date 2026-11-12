@@ -1,0 +1,22 @@
+{
+  "name": "zhidao-web",
+  "version": "1.0.0",
+  "private": true,
+  "description": "知岛静态前端",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node scripts/serve.js",
+    "build": "node scripts/build.js",
+    "check": "node scripts/check.js",
+    "test": "node test-split.js",
+    "build:face": "node build-face.js",
+    "build:tts": "node build-tts.js",
+    "fetch:tts": "node fetch-tts-model.js"
+  },
+  "devDependencies": {
+    "@tensorflow/tfjs-backend-wasm": "^4.22.0",
+    "@vladmandic/face-api": "^1.7.15"
+  }
+}

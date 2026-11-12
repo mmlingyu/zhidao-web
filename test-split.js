@@ -1,0 +1,15 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const {execFileSync} = require('node:child_process');
+const ctx={window:{ZHIDAO_API_BASE:'https://api.example.com/'}};
+vm.runInNewContext(fs.readFileSync('api-config.js','utf8'),ctx);
+assert.equal(ctx.window.ZHIDAO_API_URL('/api/grades'),'https://api.example.com/api/grades');
+ctx.window.ZHIDAO_API_BASE='';assert.equal(ctx.window.ZHIDAO_API_URL('/api/grades'),'/api/grades');
+execFileSync(process.execPath,['scripts/build.js'],{stdio:'inherit'});
+const html=fs.readFileSync('dist/index.html','utf8');
+for(const m of html.matchAll(/(?:src|href)="([^"?#]+)(?:\?[^\"]*)?"/g)) if(!m[1].includes(':')&&!m[1].startsWith('#')) assert.ok(fs.existsSync('dist/'+m[1]),m[1]);
+for(const p of ['model/tiny_face_detector_model.bin','vendor/face-api.esm.js','tts/kokoro-tts.js','config.js']) assert.ok(fs.existsSync('dist/'+p),p);
+assert.ok(!fs.existsSync('dist/server.js'));
+assert.ok(!fs.existsSync('dist/package.json'));
+console.log('Frontend split tests passed (API URL, static build and assets).');

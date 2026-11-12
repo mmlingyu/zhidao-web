@@ -1,0 +1,224 @@
+/* 知知 ZhiBot · 知岛 IP 伴学形象与动画系统 */
+:root{--zd-amp:.85}
+
+/* ---------- 侧边栏 Logo 形象 / 悬浮挂件 ---------- */
+/* 侧边栏 Logo：让 IP 在徽章内严格居中。
+   1) 不复用 .brand-mark 类，避免 styles.css 的 .brand-mark svg 把 SVG 压成 25px；
+   2) 徽章与宿主等高且双向居中，缩放原点改为几何中心，换体型时不会漂移。 */
+.zd-brand-mark{width:46px;height:52px;border-radius:15px;background:linear-gradient(160deg,#fffdf6,#eeecff 62%,#e9f5ee);border:1px solid #e6e3ef;box-shadow:0 5px 14px rgba(117,104,216,.16);transform:none;overflow:visible;display:flex;align-items:center;justify-content:center;flex:none;position:relative}
+.zd-brand-mark .zd-host{--zd-w:44px;--zd-h:52px;align-items:center}
+.zd-brand-mark .zd-scale{transform-origin:50% 50%}
+/* 机器人身体重心在 viewBox 84/160 处，微调 1px 抵消固有下移 */
+.zd-brand-mark .zd-svg{width:100%;height:100%;stroke:none;fill:none;transform:translateY(-1px)}
+.zd-subject-tag{font-size:9px;font-weight:700;border-radius:999px;padding:3px 8px;background:#fff3d3;color:#a3791f;white-space:nowrap}
+.zd-subject-tag.english{background:#eeebff;color:#6d5fc4}
+.zd-subject-tag.math{background:#e6f3ea;color:#40795a}
+.zd-action-label{font-size:9px;color:#8b849b;background:#fff;border:1px solid #e8e3f2;border-radius:999px;padding:3px 8px;white-space:nowrap}
+.zd-host{--zd-w:132px;--zd-h:205px;width:var(--zd-w);height:var(--zd-h);display:flex;align-items:flex-end;justify-content:center;flex:none;position:relative}
+.zd-host[data-zd-size="dock"]{--zd-w:96px;--zd-h:150px}
+.zd-host[data-zd-size="editor"]{--zd-w:170px;--zd-h:264px}
+.zd-host[data-zd-size="companion"]{--zd-w:132px;--zd-h:205px}
+.zd-scale{width:100%;height:100%;display:flex;align-items:flex-end;justify-content:center;transform-origin:50% 92%;transition:transform .35s cubic-bezier(.3,1.4,.5,1)}
+.zd-scale.s-small{transform:scale(.68)}
+.zd-scale.s-middle{transform:scale(.9)}
+.zd-scale.s-big{transform:scale(1.08)}
+.zd-svg{width:100%;height:100%;display:block;overflow:visible;stroke:none;fill:none}
+.zd-svg .rig{transform-origin:50% 72%;transform-box:fill-box}
+.zd-svg .head-grp{transform-origin:50% 85%;transform-box:fill-box}
+.zd-svg .antenna{transform-origin:50px 28px;transform-box:fill-box}
+.zd-svg .antenna-tip{transform-origin:center;transform-box:fill-box}
+.zd-svg .jaw{transform-origin:50% 20%;transform-box:fill-box}
+.zd-svg .chest{transform-origin:50% 50%;transform-box:fill-box}
+.zd-svg .eyes{transform-origin:50% 50%;transform-box:fill-box}
+.zd-svg .arm-l,.zd-svg .arm-r,.zd-svg .leg-l,.zd-svg .leg-r{transform-box:fill-box}
+.zd-svg .arm-l{transform-origin:85% 20%}
+.zd-svg .arm-r{transform-origin:15% 20%}
+.zd-svg .leg-l,.zd-svg .leg-r{transform-origin:50% 8%}
+.zd-svg .lid{transform-origin:center;transform-box:fill-box;transform:scaleY(0)}
+.zd-svg .zz,.zd-svg .dots,.zd-svg .spark,.zd-svg .burst,.zd-svg .voice-wave{opacity:0;pointer-events:none}
+.zd-svg .chest-led{transform-origin:center;transform-box:fill-box}
+
+/* ---------- 十种意图动画：每种动作只属于自己的关键帧 ---------- */
+.zd-svg.idle .rig{animation:zd-idle 3.4s ease-in-out infinite}
+.zd-svg.think .head-grp{animation:zd-think-tilt 2.2s ease-in-out infinite}
+.zd-svg.think .antenna-tip{animation:zd-think-antenna .75s ease-in-out infinite}
+.zd-svg.think .dots{opacity:1}
+.zd-svg.think .dots circle{animation:zd-think-dot 1.1s ease-in-out infinite}
+.zd-svg.think .dots circle:nth-child(2){animation-delay:.18s}
+.zd-svg.think .dots circle:nth-child(3){animation-delay:.36s}
+.zd-svg.speak .jaw{animation:zd-speak-jaw .28s ease-in-out infinite alternate}
+.zd-svg.speak .chest{animation:zd-speak-chest .56s ease-in-out infinite}
+.zd-svg.happy .rig{animation:zd-happy-hop .65s cubic-bezier(.3,1.65,.55,1) infinite}
+.zd-svg.happy .spark{opacity:1;animation:zd-happy-spark .7s ease-in-out infinite}
+.zd-svg.happy .arm-l{animation:zd-happy-arm .65s ease-in-out infinite}
+.zd-svg.happy .arm-r{animation:zd-happy-arm .65s ease-in-out infinite .1s}
+.zd-svg.happy .jaw{transform:scaleY(1.2)}
+.zd-svg.sad .rig{animation:zd-sad-shake .48s ease-in-out infinite}
+.zd-svg.sad .antenna{transform:rotate(28deg) translate(2px,4px)}
+.zd-svg.sad .antenna-tip{filter:brightness(.7)}
+.zd-svg.sad .head-grp{transform:rotate(7deg) translateY(3px)}
+.zd-svg.sad .jaw{transform:scaleY(.32) translateY(3px)}
+.zd-svg.sad .eyes{transform:scaleY(.85) translateY(1px)}
+.zd-svg.sleep .rig{animation:zd-sleep-breathe 5.6s ease-in-out infinite}
+.zd-svg.sleep .lid{transform:scaleY(1)}
+.zd-svg.sleep .zz{opacity:1;animation:zd-sleep-zz 2.5s ease-in-out infinite}
+.zd-svg.sleep .jaw{transform:scaleY(.5)}
+.zd-svg.focus .eyes{animation:zd-focus-eyes 1.5s ease-in-out infinite}
+.zd-svg.focus .chest-led{animation:zd-focus-led .85s ease-in-out infinite}
+.zd-svg.focus .antenna-tip{animation:zd-focus-led .85s ease-in-out infinite}
+.zd-svg.focus .head-grp{transform:translateY(-1px)}
+.zd-svg.transform .rig{animation:zd-xform-spin .85s cubic-bezier(.4,0,.2,1) both}
+.zd-svg.transform .burst{opacity:1;animation:zd-xform-burst .85s ease-out both}
+.zd-svg.wave .arm-r{animation:zd-wave-arm .48s ease-in-out infinite}
+.zd-svg.wave .head-grp{animation:zd-wave-nod 1.4s ease-in-out infinite}
+.zd-svg.walk .leg-l{animation:zd-walk-leg .46s ease-in-out infinite}
+.zd-svg.walk .leg-r{animation:zd-walk-leg .46s ease-in-out infinite reverse}
+.zd-svg.walk .rig{animation:zd-walk-bob .46s ease-in-out infinite}
+.zd-svg.walk .arm-l{animation:zd-walk-arm .46s ease-in-out infinite reverse}
+.zd-svg.walk .arm-r{animation:zd-walk-arm .46s ease-in-out infinite}
+.zd-svg .lid.blink{animation:zd-blink .18s ease-in-out}
+
+/* ---------- 朗读口型同步：由真实语音 boundary 事件驱动 ---------- */
+.zd-svg.speak .voice-wave{opacity:.9}
+.zd-svg.speak .voice-wave path{animation:zd-voice 1s ease-in-out infinite;transform-origin:center;transform-box:fill-box}
+.zd-svg.speak .voice-wave path:nth-child(2){animation-delay:.16s}
+.zd-svg.speak .voice-wave path:nth-child(3){animation-delay:.32s}
+/* lipsync 类启用后接管下巴：--zd-mouth 由语音事件实时写入，禁用固定循环 */
+.zd-svg.lipsync .jaw{animation:none!important;transform:scaleY(var(--zd-mouth,.22));transition:transform .085s ease-out}
+.zd-svg.speaking-now .chest-led{filter:brightness(1.35) drop-shadow(0 0 3px #57c98a)}
+
+@keyframes zd-idle{0%,100%{transform:scale(1,1)}50%{transform:scale(calc(1 + .028*var(--zd-amp)),calc(1 - .022*var(--zd-amp)))}}
+@keyframes zd-think-tilt{0%,100%{transform:rotate(calc(-11deg*var(--zd-amp)))}50%{transform:rotate(calc(9deg*var(--zd-amp)))}}
+@keyframes zd-think-antenna{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.25;transform:scale(calc(1 + .45*var(--zd-amp)))}}
+@keyframes zd-think-dot{0%,100%{transform:translateY(0);opacity:.25}50%{transform:translateY(calc(-8px*var(--zd-amp)));opacity:1}}
+@keyframes zd-speak-jaw{from{transform:scaleY(.28)}to{transform:scaleY(calc(.9 + .55*var(--zd-amp)))}}
+@keyframes zd-speak-chest{0%,100%{transform:scale(1)}50%{transform:scale(calc(1 + .045*var(--zd-amp)))}}
+@keyframes zd-happy-hop{0%,100%{transform:translateY(0) scale(1.06,.94)}50%{transform:translateY(calc(-24px*var(--zd-amp))) scale(.94,1.07)}}
+@keyframes zd-happy-spark{0%,100%{opacity:.2;transform:scale(.85)}50%{opacity:1;transform:scale(calc(1 + .15*var(--zd-amp)))}}
+@keyframes zd-happy-arm{0%,100%{transform:rotate(0)}50%{transform:rotate(calc(-48deg*var(--zd-amp)))}}
+@keyframes zd-sad-shake{0%,100%{transform:translateX(0) rotate(0)}25%{transform:translateX(calc(-7px*var(--zd-amp))) rotate(-2deg)}75%{transform:translateX(calc(7px*var(--zd-amp))) rotate(2deg)}}
+@keyframes zd-sleep-breathe{0%,100%{transform:scale(1,1)}50%{transform:scale(calc(1 + .018*var(--zd-amp)),calc(1 - .014*var(--zd-amp)))}}
+@keyframes zd-sleep-zz{0%{transform:translate(0,0);opacity:0}25%{opacity:1}100%{transform:translate(16px,-28px);opacity:0}}
+@keyframes zd-focus-eyes{0%,100%{transform:scale(1)}50%{transform:scale(calc(1 + .22*var(--zd-amp)))}}
+@keyframes zd-focus-led{0%,100%{opacity:1;filter:brightness(1)}50%{opacity:1;filter:brightness(calc(1 + 1.4*var(--zd-amp))) drop-shadow(0 0 4px #39FF14)}}
+@keyframes zd-xform-spin{0%{transform:scale(1) rotate(0)}35%{transform:scale(calc(1 + .18*var(--zd-amp))) rotate(calc(14deg*var(--zd-amp)))}70%{transform:scale(calc(1 - .1*var(--zd-amp))) rotate(calc(-10deg*var(--zd-amp)))}100%{transform:scale(1) rotate(0)}}
+@keyframes zd-xform-burst{0%{opacity:0;transform:scale(.35)}35%{opacity:1}100%{opacity:0;transform:scale(calc(1.5 + .3*var(--zd-amp)))}}
+@keyframes zd-wave-arm{0%,100%{transform:rotate(15deg)}50%{transform:rotate(calc(-70deg*var(--zd-amp)))}}
+@keyframes zd-wave-nod{0%,100%{transform:rotate(0)}50%{transform:rotate(calc(-4deg*var(--zd-amp)))}}
+@keyframes zd-walk-leg{0%,100%{transform:rotate(calc(-16deg*var(--zd-amp)))}50%{transform:rotate(calc(16deg*var(--zd-amp)))}}
+@keyframes zd-walk-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(calc(-3px*var(--zd-amp)))}}
+@keyframes zd-walk-arm{0%,100%{transform:rotate(calc(-10deg*var(--zd-amp)))}50%{transform:rotate(calc(10deg*var(--zd-amp)))}}
+@keyframes zd-blink{0%,100%{transform:scaleY(0)}50%{transform:scaleY(1)}}
+@keyframes zd-voice{0%,100%{opacity:.25;transform:scale(.82)}50%{opacity:1;transform:scale(1.12)}}
+@media(prefers-reduced-motion:reduce){.zd-svg *{animation-duration:.01ms!important;animation-iteration-count:1!important}}
+
+/* ---------- 悬浮挂件 ---------- */
+.zd-dock{position:fixed;right:20px;bottom:20px;z-index:60;display:flex;flex-direction:column;align-items:flex-end;gap:8px;font-family:var(--sans)}
+.zd-dock-bubble{max-width:210px;background:#fff;border:1px solid #e6e1ef;border-radius:14px 14px 4px 14px;padding:10px 13px;font-size:11px;line-height:1.7;color:#4a4558;box-shadow:0 10px 30px rgba(45,38,70,.13);animation:zd-pop .25s ease-out;pointer-events:none}
+.zd-dock-bubble b{display:block;font-size:9px;color:#9b92ad;letter-spacing:1px;margin-bottom:3px;font-weight:600}
+.zd-dock-card{background:#fff;border:1px solid #e8e5f0;border-radius:18px;box-shadow:0 14px 38px rgba(40,34,66,.14);padding:6px 8px 8px;display:flex;flex-direction:column;align-items:center;width:140px}
+.zd-dock-head{display:flex;align-items:center;justify-content:space-between;width:100%;padding:2px 4px 0}
+.zd-dock-head strong{font-size:11px;color:#4c4660;font-family:var(--serif)}
+.zd-dock-head button{border:0;background:#f4f1fb;color:#7568d8;border-radius:8px;font-size:9px;padding:4px 7px}
+.zd-dock-head button:hover{background:#e9e4fa}
+.zd-dock-card>.zd-subject-tag{margin-top:5px;font-size:8px;padding:2px 7px}
+.zd-dock-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:5px;margin-top:5px;width:100%}
+.zd-dock-actions .zd-action-label{flex-basis:100%;text-align:center;white-space:normal;line-height:1.5}
+.zd-dock-actions button{border:1px solid #e9e5f1;background:#faf9fd;border-radius:999px;font-size:9px;color:#7b7191;padding:4px 8px}
+.zd-dock-actions button:hover{background:#efedff;color:#6a5ac7}
+.zd-dock.collapsed .zd-dock-card{width:auto;flex-direction:row;gap:8px;padding:8px 10px}
+.zd-dock.collapsed .zd-dock-bubble,.zd-dock.collapsed .zd-dock-card>.zd-host,.zd-dock.collapsed .zd-dock-head strong,.zd-dock.collapsed .zd-dock-card>.zd-subject-tag,.zd-dock.collapsed .zd-dock-actions{display:none}
+.zd-dock.collapsed .zd-dock-card:before{content:'✨';font-size:16px}
+@keyframes zd-pop{from{opacity:0;transform:translateY(8px) scale(.96)}to{opacity:1;transform:none}}
+
+/* ---------- 形象编辑器 ---------- */
+/* 形象工坊弹窗加宽，减少纵向滚动 */
+.modal:has(.zd-editor){width:min(760px,100%);max-height:88vh}
+.modal:has(.zd-editor) .modal-body{max-height:72vh;padding:16px 20px}
+.zd-editor{display:grid;grid-template-columns:180px minmax(0,1fr);gap:20px}
+.zd-editor-preview{background:linear-gradient(160deg,#f7f5ff,#eef6f0);border:1px solid #e9e5f2;border-radius:16px;padding:10px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:8px;align-self:start}
+.zd-editor-preview .zd-host{--zd-w:150px;--zd-h:232px}
+.zd-editor-preview small{font-size:9px;color:#8b849b;text-align:center;line-height:1.6}
+.zd-editor-form{display:flex;flex-direction:column;gap:9px;min-width:0}
+.zd-field{min-width:0}
+.zd-field>label{display:block;font-size:9px;font-weight:700;letter-spacing:1px;color:#8d879b;margin-bottom:5px}
+.zd-field input[type=text]{width:100%;border:1px solid #e3deee;background:#fff;border-radius:9px;padding:8px 10px;font-size:12px;color:var(--ink)}
+.zd-chips{display:flex;flex-wrap:wrap;gap:5px}
+.zd-chips button{border:1px solid #e5e0ee;background:#fff;border-radius:999px;padding:5px 9px;font-size:10px;color:#6f687f}
+.zd-chips button.on{background:#7568d8;color:#fff;border-color:#7568d8;font-weight:600}
+.zd-chips button:hover:not(.on){background:#f2effc}
+.zd-swatches{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
+.zd-swatch{width:24px;height:24px;border-radius:8px;border:2px solid #fff;box-shadow:0 0 0 1px #ded8ea;cursor:pointer;padding:0}
+.zd-swatch.on{box-shadow:0 0 0 2px #7568d8}
+.zd-color-input{width:34px;height:28px;border:1px solid #ded8ea;border-radius:8px;background:#fff;padding:2px;cursor:pointer}
+.zd-range{width:100%;accent-color:#7568d8}
+/* 音色配置：下拉按男女 / 语言分组；离线时给出明确状态而不是静默哑掉 */
+.zd-voice-select{width:100%;margin-top:8px;border:1px solid #e3deee;background:#fff;border-radius:9px;padding:8px 10px;font-size:11px;color:var(--ink)}
+.zd-voice-select:disabled{background:#f6f4fb;color:#a49db3;cursor:not-allowed}
+.zd-voice-tools{display:flex;gap:7px;align-items:center;margin-top:7px}
+.zd-voice-tools button{border:1px solid #e2dcef;background:#fff;border-radius:9px;padding:6px 11px;font-size:10px;color:#6b6380;white-space:nowrap;cursor:pointer}
+.zd-voice-tools button:hover{background:#f2effc}
+.zd-voice-tools input[type=text]{flex:1;min-width:0;width:auto;border:1px solid #e3deee;background:#fff;border-radius:9px;padding:6px 9px;font-size:10px;color:var(--ink)}
+.zd-voice-hint{display:block;margin-top:6px;font-size:9px;line-height:1.6;color:#8d879b}
+.zd-voice-hint.offline{color:#b06a4f}
+/* 按学科配音：语文/数学只列中文音色，英语只列英文音色 */
+.zd-subject-voices{margin-top:11px;border-top:1px dashed #e6e1f0;padding-top:10px}
+.zd-subject-voices-title{font-size:10px;font-weight:600;color:#6f6784;margin-bottom:7px}
+.zd-subject-voice{display:flex;gap:7px;align-items:center;margin-bottom:6px}
+.zd-subject-voice-name{flex:0 0 30px;font-size:10px;color:#6f6784}
+.zd-subject-voice-select{flex:1;min-width:0;margin-top:0}
+.zd-subject-voice-preview{flex:0 0 auto;border:1px solid #e2dcef;background:#fff;border-radius:9px;padding:6px 10px;font-size:10px;color:#6b6380;cursor:pointer}
+.zd-subject-voice-preview:hover{background:#f2effc}
+#zd-voice-state{font-weight:600;color:#7568d8}
+.zd-editor-note{font-size:9px;line-height:1.8;color:#918a9e;background:#f8f6fd;border-radius:10px;padding:9px 11px}
+.zd-editor-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:2px}
+.zd-editor-actions button{border:1px solid #e2dcef;background:#fff;border-radius:9px;padding:8px 13px;font-size:10px;color:#6b6380}
+.zd-editor-actions button.primary{background:#7568d8;color:#fff;border-color:#7568d8;font-weight:600}
+.zd-editor-actions button:hover{filter:brightness(.97)}
+.zd-ip-card{border:1px solid #ece7f4;background:#fff;border-radius:14px;padding:13px 15px;margin-bottom:16px}
+.zd-ip-card h4{margin:0 0 6px;font-size:13px;font-family:var(--serif)}
+.zd-ip-card p{margin:0;font-size:10px;line-height:1.9;color:#7d778a}
+.zd-ip-legend{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.zd-ip-legend span{font-size:9px;border-radius:999px;padding:4px 9px;background:#f7f5fb}
+
+@media(max-width:650px){
+  .zd-dock{right:8px;bottom:8px}
+  .zd-dock-bubble{display:none}
+  .zd-dock-card{width:100px;padding:6px 8px 8px}
+  .zd-dock-card>.zd-host{--zd-w:76px;--zd-h:118px}
+  .zd-dock-card>.zd-subject-tag,.zd-dock-actions .zd-action-label{display:none}
+  .zd-dock-actions{margin-top:2px}
+  .zd-editor{grid-template-columns:1fr}
+  .zd-editor-preview .zd-host{--zd-w:120px;--zd-h:186px}
+}
+
+/* 点一点知知：首页 IP 形象可点，点击后弹出语音提问框。 */
+[data-zd-chat]{cursor:pointer;transition:transform .18s ease,filter .18s ease}
+[data-zd-chat]:hover{transform:translateY(-2px) scale(1.04);filter:drop-shadow(0 6px 12px rgba(117,104,216,.22))}
+[data-zd-chat]:active{transform:translateY(0) scale(.98)}
+[data-zd-chat]:focus-visible{outline:2px solid #7568d8;outline-offset:4px;border-radius:14px}
+.zd-chat{display:flex;flex-direction:column;gap:11px;font-family:var(--sans)}
+.zd-chat-hero{display:flex;align-items:center;gap:14px;padding:12px 14px;border:1px solid #eae5f4;border-radius:16px;background:linear-gradient(135deg,#f8f5ff,#f1faf5)}
+.zd-chat-mascot{flex:none}
+.zd-chat-mascot .zd-host{--zd-w:62px;--zd-h:96px}
+.zd-chat-bubble{flex:1;min-width:0}
+.zd-chat-bubble b{display:block;font-size:9px;letter-spacing:1px;color:#9b92ad;margin-bottom:4px}
+.zd-chat-bubble p{margin:0;font-size:13px;line-height:1.75;color:#433d5a;font-weight:600}
+.zd-chat-bubble small{display:block;margin-top:6px;font-size:9px;color:#8b83a0}
+.zd-chat-label{font-size:10px;font-weight:600;color:#6b6380;letter-spacing:.5px}
+.zd-chat-input{width:100%;box-sizing:border-box;resize:vertical;min-height:76px;border:1px solid #e2dcef;border-radius:12px;padding:10px 12px;font-size:12px;line-height:1.7;color:#433d5a;background:#fff;font-family:inherit}
+.zd-chat-input:focus{outline:none;border-color:#9a8ee6;box-shadow:0 0 0 3px rgba(117,104,216,.12)}
+.zd-chat-suggestions{display:flex;flex-wrap:wrap;gap:6px}
+.zd-chat-suggestions button{border:1px solid #e8e3f3;background:#faf9fd;color:#6f6784;border-radius:999px;padding:5px 10px;font-size:10px;cursor:pointer;text-align:left}
+.zd-chat-suggestions button:hover{background:#efecff;color:#6a5ac7}
+.zd-chat-actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:2px}
+.zd-chat-actions button{border:1px solid #e2dcef;background:#fff;border-radius:10px;padding:8px 13px;font-size:11px;color:#6b6380;cursor:pointer}
+.zd-chat-actions button:hover{background:#f5f2ff;color:#6a5ac7}
+.zd-chat-actions .zd-chat-submit{background:#7568d8;border-color:#7568d8;color:#fff;font-weight:600}
+.zd-chat-actions .zd-chat-submit:hover{background:#6556c9;color:#fff}
+.zd-chat-note{margin:0;font-size:9px;line-height:1.7;color:#9a94a8}
+@media(max-width:650px){
+  .zd-chat-hero{gap:10px;padding:10px}
+  .zd-chat-mascot .zd-host{--zd-w:52px;--zd-h:80px}
+  .zd-chat-bubble p{font-size:12px}
+}

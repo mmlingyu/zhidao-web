@@ -1,0 +1,178 @@
+/* 用户体系界面：登录 / 注册 / 家庭成员管理
+ * 沿用主应用的设计语言（紫调、圆角、紧凑字号），保证视觉一致。 */
+
+/* ---------- 顶部栏入口 ---------- */
+.id-entry {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 11px;
+  padding: 6px 12px 6px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--ink);
+  transition: border-color .18s, background .18s;
+}
+.id-entry:hover { border-color: #d9d4ee; background: #fbfaff; }
+.id-entry .avatar {
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--purple); color: #fff;
+  display: grid; place-items: center;
+  font-size: 11px; font-weight: 700;
+}
+.id-entry .id-entry-name { max-width: 84px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.id-entry svg { width: 15px; height: 15px; color: var(--muted); }
+
+/* ---------- 标签页 ---------- */
+.id-tabs {
+  display: flex; gap: 6px; padding: 4px;
+  background: #f1f1ec; border-radius: 11px; margin-bottom: 16px;
+}
+.id-tab {
+  flex: 1; border: 0; background: transparent;
+  padding: 8px 10px; border-radius: 8px;
+  font-size: 12px; color: var(--muted);
+  transition: background .18s, color .18s, box-shadow .18s;
+}
+.id-tab.active { background: #fff; color: var(--ink); box-shadow: 0 1px 4px rgba(40,50,44,.08); }
+
+.id-lead { font-size: 12px; color: #8b938c; line-height: 1.8; margin: 0 0 14px; }
+
+/* ---------- 表单 ---------- */
+.id-form { display: flex; flex-direction: column; gap: 13px; }
+.id-label { display: flex; flex-direction: column; gap: 7px; }
+.id-label > span { font-size: 11px; color: #7d857e; }
+.id-field {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--ink);
+  transition: border-color .18s, box-shadow .18s;
+}
+.id-field:focus {
+  outline: none;
+  border-color: #bdb5e8;
+  box-shadow: 0 0 0 3px rgba(117,104,216,.1);
+}
+select.id-field { appearance: none; background-image: none; cursor: pointer; }
+
+/* ---------- 按钮 ---------- */
+.id-btn {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-size: 12px;
+  color: var(--ink);
+  transition: background .18s, border-color .18s, transform .12s;
+}
+.id-btn:active { transform: translateY(1px); }
+.id-btn.primary { background: var(--purple); border-color: var(--purple); color: #fff; }
+.id-btn.primary:hover { background: var(--purple-dark); border-color: var(--purple-dark); }
+.id-btn.primary:disabled { opacity: .55; cursor: not-allowed; }
+.id-btn.ghost { background: #f7f7f3; }
+.id-btn.wide { width: 100%; }
+
+/* ---------- 人脸采集区 ---------- */
+.id-video-box {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  background: #1d2320;
+  border-radius: 14px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+.id-video-box video {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: none;
+  /* 摄像头画面是镜像的，符合用户对着镜头的直觉 */
+  transform: scaleX(-1);
+}
+.id-video-box.live video { display: block; }
+.id-video-idle {
+  position: absolute; inset: 0;
+  display: grid; place-items: center; gap: 10px;
+  align-content: center;
+  color: #6f7a73; font-size: 11px;
+}
+.id-video-idle svg { width: 34px; height: 34px; opacity: .6; }
+.id-face-ring {
+  position: absolute; inset: 0;
+  border: 2px solid rgba(255,255,255,.22);
+  border-radius: 50%;
+  width: 58%; height: 58%;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.id-face-hint { font-size: 11px; color: #8b938c; margin: 0; min-height: 17px; }
+.id-face-actions { display: flex; gap: 9px; }
+.id-face-actions .id-btn { flex: 1; }
+
+/* ---------- 成员列表 ---------- */
+.id-member-list { display: flex; flex-direction: column; gap: 9px; margin-bottom: 14px; }
+.id-empty { font-size: 12px; color: #959c95; text-align: center; padding: 26px 12px; margin: 0; }
+.id-member {
+  display: flex; align-items: center; gap: 12px;
+  border: 1px solid var(--line); background: #fff;
+  border-radius: 12px; padding: 12px 14px;
+}
+.id-member-avatar {
+  width: 38px; height: 38px; border-radius: 50%;
+  background: var(--purple-soft); color: var(--purple-dark);
+  display: grid; place-items: center;
+  font-size: 15px; font-weight: 700; flex: none;
+}
+.id-member-info { flex: 1; min-width: 0; }
+.id-member-info strong { display: block; font-size: 13px; }
+.id-member-info small { display: block; font-size: 10px; color: #9a9f99; margin-top: 4px; }
+.id-member-actions { display: flex; gap: 6px; flex: none; }
+.id-chip {
+  border: 1px solid var(--line); background: #fff;
+  border-radius: 8px; padding: 5px 10px;
+  font-size: 10px; color: #6f6a86;
+}
+.id-chip:hover { border-color: #d5cfee; background: #fbfaff; }
+.id-chip.danger { color: #c07267; }
+.id-chip.danger:hover { border-color: #e8cdc8; background: #fdf6f5; }
+
+/* 登录账号提示（同名时需要用账号 ID 区分） */
+.id-account-hint {
+  font-size: 10px; color: #9a9f99; line-height: 1.7;
+  margin: 12px 0 0; text-align: center;
+  word-break: break-all;
+}
+
+/* ---------- 错误提示 ---------- */
+.toast.error svg { color: #f0a79c; }
+
+/* ---------- 移动端 ---------- */
+@media (max-width: 640px) {
+  .modal { width: 100%; max-height: 92vh; border-radius: 18px; }
+  .modal-body { max-height: 74vh; padding: 16px 18px; }
+  .id-entry .id-entry-name { max-width: 56px; }
+  .id-member { flex-wrap: wrap; }
+  .id-member-actions { width: 100%; justify-content: flex-end; }
+  /* 移动端按钮更大更好点 */
+  .id-btn { padding: 12px 16px; font-size: 13px; }
+  .id-chip { padding: 8px 12px; font-size: 11px; }
+  /* 刘海屏：底部按钮要避开 Home Indicator */
+  .modal { padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .id-form { padding-bottom: 8px; }
+  .id-face-actions { position: sticky; bottom: 0; background: #fcfcf9; padding-bottom: 4px; }
+}
+
+/* ---------- 安全区域（刘海屏 / Home Indicator） ---------- */
+@supports (padding: max(0px)) {
+  .id-video-box { border-radius: 14px; }
+}
+
+/* ---------- 摄像头不可用的提示 ---------- */
+.id-face-hint.warn { color: #b5714f; }
+.id-tab.highlight { color: var(--purple-dark); font-weight: 600; }

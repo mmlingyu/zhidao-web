@@ -1,0 +1,14 @@
+.env
+.env.*
+!.env.example
+node_modules/
+cache/
+*.log
+.DS_Store
+bench-results.json
+*.pem
+*.key
+*.pfx
+dist/
+public/tts/models/**/*.onnx
+*.part

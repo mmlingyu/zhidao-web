@@ -1,0 +1,20 @@
+{
+  "name": "知岛 · 让知识有画面",
+  "short_name": "知岛",
+  "description": "语文、英语、数学互动知识讲解应用：输入知识点，自动判断学科并生成互动讲解。",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f6f7f3",
+  "theme_color": "#7568d8",
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
