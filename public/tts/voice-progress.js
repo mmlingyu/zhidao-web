@@ -75,11 +75,14 @@
     }
     failureKey = '';
     if (!busy) { hide(); return; }
+    // 模型已下载过（本次是从缓存加载）：预热照常静默进行，不再每次打开页面都弹加载卡片，
+    // 真正失败时才由上面的分支给出提示。
+    if (state.cached) { hide(); return; }
     if (!active) {
       active = true;
       panel.hidden = false;
       close.hidden = true;
-      // Cached loads get a light one-line hint, not a flashing large card.
+      // 首次下载先给一行轻提示，1.6 秒后才展开成大卡片，避免闪一下。
       expandTimer = setTimeout(() => panel.classList.add('is-expanded'), 1600);
     }
     const preparing = state.stage === 'initializing' || state.state === 'ready';
