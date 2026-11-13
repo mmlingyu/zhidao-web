@@ -303,13 +303,13 @@
     return 1;
   }
 
-  /** 把消息数组走一遍 JSONL，证明协议链路与未来 SSE 推流同构。 */
-  function feedJSONL(surface, messages, stream = false) {
-    const lines = messages.map(message => JSON.stringify(message)).join('\n').split('\n').filter(Boolean);
-    const parsed = lines.map(line => JSON.parse(line));
-    if (stream) for (const message of parsed) surface.feed(message);
-    else surface.feed(parsed);
-    return lines.length;
+  /** 把已经校验过的消息一次交给 renderer。
+   *  过去 stream=true 会逐条 feed，每条都整树重绘，课程 JSONL 一到就把主线程占满。
+   *  渐进预览由 SSE 侧分批负责；这里挂载最终界面只渲染一次。参数 stream 保留给旧调用方。 */
+  function feedJSONL(surface, messages) {
+    const list = Array.isArray(messages) ? messages : [];
+    surface.feed(list);
+    return list.length;
   }
 
   /**
