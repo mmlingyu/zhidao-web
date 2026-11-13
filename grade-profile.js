@@ -276,6 +276,37 @@ function lessonFieldPrompt(grade, subject) {
   return `\n【语文栏目年级适配】poems 的 text：${poems.rule}；practicePrompt：${writing.rule}。`;
 }
 
+/* 账号里的真实年级 id → 首页只读「虚拟阶段」。
+ * 一年级是一阶，二年级是二阶，一路到九年级九阶；高中接在后面。
+ * 学前和未知年级不编造阶段。课程请求仍使用原来的 grade id，不用这串文案。 */
+const VIRTUAL_STAGES = {
+  grade1: '一阶',
+  grade2: '二阶',
+  grade3: '三阶',
+  grade4: '四阶',
+  grade5: '五阶',
+  grade6: '六阶',
+  grade7: '七阶',
+  grade8: '八阶',
+  grade9: '九阶',
+  senior1: '十阶',
+  senior2: '十一阶',
+  senior3: '十二阶'
+};
+
+function virtualStageForGrade(grade) {
+  const key = String(grade || '').trim();
+  if (!key || key === 'preschool') return null;
+  return VIRTUAL_STAGES[key] || null;
+}
+
+/** 课程与界面画像只用登录学生账号上的年级，不读首页手动选择。 */
+function accountGrade(session) {
+  const user = session && session.user;
+  if (!user || user.role !== 'student') return '';
+  return String(user.grade || '').trim();
+}
+
 /** 年级 → 认知阶段。未知/未填年级时取一个中性档，不做幼态化假设。 */
 function stageForGrade(grade) {
   const key = String(grade || '').trim();
@@ -313,9 +344,10 @@ function stageSummary() {
 }
 
 const API = {
-  STAGES, DEFAULT_STAGE, HINTS, GENERIC_HINTS,
+  STAGES, DEFAULT_STAGE, HINTS, GENERIC_HINTS, VIRTUAL_STAGES,
   stageForGrade, promptForGrade, uiProfileForGrade,
-  hintForGrade, lessonFieldPrompt, stageSummary
+  hintForGrade, lessonFieldPrompt, stageSummary,
+  virtualStageForGrade, accountGrade
 };
 
 if (typeof window !== 'undefined') window.ZHIDAO_GRADE = API;

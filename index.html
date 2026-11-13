@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="mascot.css?v=20261112n">
   <link rel="stylesheet" href="identity.css">
   <link rel="stylesheet" href="pwa.css?v=20261110a">
-  <link rel="stylesheet" href="knowledge.css?v=20261112n">
+  <link rel="stylesheet" href="knowledge.css?v=20261113stage">
 </head>
 <body>
   <svg class="svg-sprite" aria-hidden="true">
@@ -78,7 +78,7 @@
     <main class="main-area">
       <header class="topbar">
         <div class="topbar-left"><button class="icon-button mobile-menu" id="mobile-menu" aria-label="打开菜单"><svg><use href="#i-menu"></use></svg></button><span>学习空间</span><svg class="tiny-chevron"><use href="#i-chevron"></use></svg><strong>互动讲解</strong></div>
-        <div class="topbar-right"><span class="streak"><svg><use href="#i-flame"></use></svg>连续学习 <b>7</b> 天</span><label class="learner-picker" title="按年级调整讲解深度与界面"><svg><use href="#i-users"></use></svg><select id="learner-grade" aria-label="选择学习者年级"><option value="">通用</option></select><span class="learner-hint" id="learner-hint"></span></label><button class="id-entry" id="id-entry" type="button"><span class="avatar">知</span><span class="id-entry-name" id="id-entry-name">登录</span><svg><use href="#i-chevron"></use></svg></button><button class="guide-button" id="zd-top-editor"><svg><use href="#i-pen"></use></svg>形象工坊</button><button class="guide-button" id="guide-button"><svg><use href="#i-bulb"></use></svg>使用指南</button></div>
+        <div class="topbar-right"><span class="streak"><svg><use href="#i-flame"></use></svg>连续学习 <b>7</b> 天</span><span class="learner-stage is-missing" id="learner-stage" role="status" aria-live="polite" aria-label="未设置年级"><svg aria-hidden="true"><use href="#i-users"></use></svg><span class="learner-stage-label" id="learner-stage-label">未设置年级</span><button type="button" class="learner-stage-setup" id="learner-stage-setup">去设置</button></span><button class="id-entry" id="id-entry" type="button"><span class="avatar">知</span><span class="id-entry-name" id="id-entry-name">登录</span><svg><use href="#i-chevron"></use></svg></button><button class="guide-button" id="zd-top-editor"><svg><use href="#i-pen"></use></svg>形象工坊</button><button class="guide-button" id="guide-button"><svg><use href="#i-bulb"></use></svg>使用指南</button></div>
       </header>
 
       <div class="content-wrap" id="explore-page">
@@ -142,7 +142,7 @@
   </script>
   <script src="config.js?v=20261112y"></script>
   <script src="api-config.js?v=20261112y"></script>
-  <script src="grade-profile.js?v=20261111a"></script>
+  <script src="grade-profile.js?v=20261113stage"></script>
   <script src="feedback.js?v=20261111a"></script>
   <script src="a2ui-catalog.js?v=20261112b"></script>
   <script src="a2ui-matrix.js?v=20261112b"></script>
@@ -164,7 +164,7 @@
   <script src="face.js?v=20261112c"></script>
   <script src="identity.js?v=20261112y"></script>
   <script src="identity-ui.js?v=20261110a"></script>
-  <script src="learner.js?v=20261112y"></script>
+  <script src="learner.js?v=20261113stage"></script>
   <script src="knowledge-client.js?v=20261112y"></script>
   <script src="quiz-display.js?v=20261112q"></script>
   <script src="/tts/lesson-preview-gate.js?v=20261113tts"></script>

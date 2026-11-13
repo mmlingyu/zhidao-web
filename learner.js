@@ -1,7 +1,7 @@
 /* 学习者年级 · 前端形态控制器
  *
  * 职责：
- *   1. 决定「现在是谁在学」——登录学生用自己年级，家长/游客可手动选年级；
+ *   1. 决定「现在是谁在学」——只用登录学生账号里保存的年级；
  *   2. 把年级画像落到 DOM（data-stage + CSS 变量），让 CSS 统一改变字号、密度、
  *      卡片数量、按钮尺寸、隐藏/显示高级模块；
  *   3. 让浏览器缓存与请求都带上年级，避免切换孩子后看到上一份讲解。
@@ -11,22 +11,23 @@
 'use strict';
 
 const LEARNER = (() => {
-  const PICK_KEY = 'zhidao.learner.grade';
   const listeners = new Set();
-  let manualGrade = '';
   let grades = [];
   let currentProfile = null;
+  let appliedGrade = null;
 
-  function readPicked() {
-    try { return String(localStorage.getItem(PICK_KEY) || '').trim(); } catch { return ''; }
+  /** 当前生效年级：登录学生账号上的年级 id。空字符串表示未设置。 */
+  function grade() {
+    const fromProfile = window.ZHIDAO_GRADE?.accountGrade?.(window.IDENTITY?.current?.());
+    if (typeof fromProfile === 'string') return fromProfile;
+    const session = window.IDENTITY?.current?.();
+    const user = session && session.user;
+    if (user && user.role === 'student' && user.grade) return String(user.grade).trim();
+    return '';
   }
 
-  /** 当前生效年级：手动选择 > 登录学生自己的年级 > 空（通用）。 */
-  function grade() {
-    if (manualGrade) return manualGrade;
-    const session = window.IDENTITY?.current?.();
-    if (session?.user?.role === 'student' && session.user.grade) return session.user.grade;
-    return '';
+  function virtualStageLabel() {
+    return window.ZHIDAO_GRADE?.virtualStageForGrade?.(grade()) || '';
   }
 
   function profile() {
@@ -86,46 +87,70 @@ const LEARNER = (() => {
     return () => listeners.delete(fn);
   }
 
-  function setGrade(next) {
-    const value = String(next || '').trim();
-    manualGrade = value;
-    try {
-      if (value) localStorage.setItem(PICK_KEY, value);
-      else localStorage.removeItem(PICK_KEY);
-    } catch { /* 隐私模式下不持久化，本次会话仍生效 */ }
-    renderPicker();
-    apply();
-    // 年级变化后清空浏览器课程缓存：同一知识点不同年级不是同一份课。
-    try { localStorage.removeItem('zhidao-tutor-cache'); } catch { /* 忽略 */ }
-    window.dispatchEvent(new CustomEvent('zhidao:learnerchange', { detail: { grade: value, profile: currentProfile } }));
+  /* ---------------- 顶栏只读阶段 ---------------- */
+
+  function renderStage() {
+    const host = document.getElementById('learner-stage');
+    const label = document.getElementById('learner-stage-label');
+    const setup = document.getElementById('learner-stage-setup');
+    if (!host || !label) return;
+    const value = grade();
+    const virtual = virtualStageLabel();
+    const session = window.IDENTITY?.current?.();
+    const role = session?.user?.role || '';
+    host.classList.toggle('is-missing', !virtual);
+    if (virtual) {
+      label.textContent = virtual;
+      host.title = `当前阶段 ${virtual}，由账号年级决定`;
+      host.setAttribute('aria-label', `当前学习阶段 ${virtual}`);
+      if (setup) setup.hidden = true;
+      return;
+    }
+    if (setup) setup.hidden = false;
+    if (value === 'preschool') {
+      label.textContent = '学前不设阶段';
+      host.title = '学前年级不对应虚拟阶段';
+      host.setAttribute('aria-label', '学前不设阶段');
+      if (setup) setup.hidden = true;
+    } else if (value) {
+      label.textContent = '暂无对应阶段';
+      host.title = '当前年级还没有对应的学习阶段';
+      host.setAttribute('aria-label', '暂无对应阶段');
+      if (setup) setup.hidden = true;
+    } else if (role === 'parent') {
+      label.textContent = '未设置年级';
+      host.title = '在家庭空间为孩子填写年级';
+      host.setAttribute('aria-label', '未设置年级，可在家庭空间为孩子填写');
+    } else {
+      label.textContent = '未设置年级';
+      host.title = '登录学生账号后显示学习阶段';
+      host.setAttribute('aria-label', '未设置年级，去登录或创建账号');
+    }
   }
 
-  /* ---------------- 顶栏年级选择器 ---------------- */
-
-  function renderPicker() {
-    const select = document.getElementById('learner-grade');
-    if (!select || !grades.length) return;
-    const active = grade();
-    select.innerHTML = `<option value="">通用</option>` + grades
-      .map(item => `<option value="${item.id}">${item.label}</option>`).join('');
-    select.value = active;
-    const hint = document.getElementById('learner-hint');
-    if (hint) hint.textContent = currentProfile?.label || '通用';
-  }
-
-  function bindPicker() {
-    const select = document.getElementById('learner-grade');
-    if (!select) return;
-    select.addEventListener('change', () => {
-      setGrade(select.value);
-      if (window.showToast) window.showToast(select.value ? `已切换为${gradeLabel()}的讲法` : '已切回通用讲解');
-      // 当前已渲染的课程需要按新年级重新生成，否则「内容还是原来的」。
-      window.dispatchEvent(new CustomEvent('zhidao:learnerrefresh'));
+  function bindStage() {
+    const setup = document.getElementById('learner-stage-setup');
+    if (!setup || setup.dataset.bound === '1') return;
+    setup.dataset.bound = '1';
+    setup.addEventListener('click', () => {
+      document.getElementById('id-entry')?.click();
     });
   }
 
+  function publish(refreshLesson) {
+    const next = grade();
+    const changed = appliedGrade !== null && next !== appliedGrade;
+    appliedGrade = next;
+    renderStage();
+    apply();
+    if (changed) {
+      try { localStorage.removeItem('zhidao-tutor-cache'); } catch { /* 忽略 */ }
+      window.dispatchEvent(new CustomEvent('zhidao:learnerchange', { detail: { grade: next, profile: currentProfile } }));
+      if (refreshLesson) window.dispatchEvent(new CustomEvent('zhidao:learnerrefresh'));
+    }
+  }
+
   async function init() {
-    manualGrade = readPicked();
     try {
       const response = await fetch((typeof window.ZHIDAO_API_URL === "function" ? window.ZHIDAO_API_URL : (p => p))('/api/grades'), { headers: { Accept: 'application/json' } });
       const data = await response.json().catch(() => null);
@@ -133,22 +158,18 @@ const LEARNER = (() => {
     } catch { /* 离线时用画像自带的兜底 */ }
     if (!grades.length) {
       grades = (window.ZHIDAO_GRADE?.STAGES || []).flatMap(stage =>
-        stage.grades.map((id, i) => ({ id, label: `${stage.label}${i ? '' : ''} · ${id}` })));
+        stage.grades.map(id => ({ id, label: id })));
     }
-    renderPicker();
+    bindStage();
+    appliedGrade = grade();
+    renderStage();
     apply();
-    bindPicker();
-    // 登录状态变化时（人脸/口令登录、退出），学生年级可能变了。
-    // 注意：手动选择的年级优先于会话年级，所以登录变化只重算，不覆盖用户选择。
-    window.addEventListener('zhidao:identitychange', () => {
-      renderPicker(); apply();
-      // 登录/退出可能改变学生年级，已渲染课程的栏目提示需要跟着变。
-      window.dispatchEvent(new CustomEvent('zhidao:learnerchange', { detail: { grade: grade(), profile: currentProfile } }));
-    });
+    // 登录、退出或家庭资料更新后，只跟账号里的年级走。
+    window.addEventListener('zhidao:identitychange', () => publish(true));
     return currentProfile;
   }
 
-  return { init, apply, grade, gradeLabel, profile, stage, hint, setGrade, onChange, get grades() { return grades; } };
+  return { init, apply, grade, gradeLabel, profile, stage, hint, virtualStage: virtualStageLabel, onChange, get grades() { return grades; } };
 })();
 
 if (typeof window !== 'undefined') window.LEARNER = LEARNER;
