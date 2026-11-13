@@ -7,7 +7,9 @@
  *   运行时 /tts/ort/*.wasm
  *
  * 打包产物：public/tts/kokoro-tts.js（由 build-tts.js 生成，不手改）。
- * 暴露 window.ZhidaoTTS = { load, synthesize, status, voices }。
+ * 页面不直接 import 本文件：public/tts/kokoro-worker.js 在独立 Worker 里加载打包产物，
+ * 分词 / 音素 / ONNX 初始化与合成都离开主线程。本文件保持无 DOM，便于那条 Worker 调用。
+ * 暴露 window.ZhidaoTTS = { load, synthesize, status, voices }（仅在主线程回退路径上）。
  */
 import { KokoroTTS } from '@uzen/kokoro-js';
 /* 必须从 transformers.js 拿原始 env：kokoro-js 导出的 env 只是代理对象，
@@ -29,6 +31,17 @@ env.backends.onnx.wasm.wasmPaths = ORT_PATH;
 /* 不用 Cache API 存模型：几百 MB 写进 Cache Storage 容易触发配额失败
  *（ERR_CACHE_WRITE_FAILURE）。模型由 HTTP 缓存（本站发 immutable）负责复用。 */
 try { env.useBrowserCache = false; } catch { /* 老版本没有这个开关 */ }
+/* Let lesson/API traffic take precedence over the large background transfer.
+ * Reuse Transformers' fetch + streaming progress + normal HTTP cache; no second
+ * prefetch request, cache-busting model URL, or duplicate 324 MB buffer. */
+if (typeof env.fetch === 'function') {
+  const fetchModelFile = env.fetch;
+  env.fetch = (input, init = {}) => {
+    const url = typeof input === 'string' ? input : String(input?.url || input);
+    return fetchModelFile(input, /\.onnx(?:$|[?#])/.test(url)
+      ? { ...init, priority: 'low' } : init);
+  };
+}
 /* 没有 COOP/COEP 时不能用多线程 wasm；单线程足够，WebGPU 走 GPU 不受影响。 */
 try { env.backends.onnx.wasm.numThreads = 1; } catch { /* 老版本没有这个开关 */ }
 
@@ -38,6 +51,9 @@ const state = {
   error: '',
   device: '',
   progress: 0,
+  loaded: 0,
+  total: 0,
+  stage: 'idle',
   modelId: MODEL_ID,
   dtype: DTYPE,
   engine: null
@@ -56,6 +72,7 @@ function status() {
     error: state.error,
     device: state.device,
     progress: state.progress,
+    loaded: state.loaded, total: state.total, stage: state.stage,
     modelId: state.modelId,
     dtype: state.dtype,
     version: '1.0.0'
@@ -79,6 +96,10 @@ async function loadModel() {
   if (state.ready && state.engine) return state.engine;
   if (state.loading) return state.loading;
   state.error = '';
+  state.progress = 0;
+  state.loaded = 0;
+  state.total = 0;
+  state.stage = 'starting';
   state.loading = (async () => {
     const device = await pickDevice();
     state.device = device;
@@ -88,10 +109,21 @@ async function loadModel() {
       device,
       voicePath: VOICE_PATH,
       progress_callback: (info) => {
-        if (!info) return;
-        if (info.status === 'progress') state.progress = Number(info.progress || 0);
-        else if (info.status === 'initiate') state.progress = 0;
-        else if (info.status === 'done') state.progress = 100;
+        // Transformers already streams the response with loaded/total bytes.
+        // Only track ONNX: tiny tokenizer/config files must not reset the bar to 100%.
+        if (!info || !/\.onnx(?:$|[?#])/.test(info.file || '')) return;
+        if (info.status === 'initiate') {
+          state.stage = 'downloading';
+        } else if (info.status === 'progress') {
+          state.loaded = Math.max(0, Number(info.loaded) || 0);
+          state.total = Math.max(0, Number(info.total) || 0);
+          state.progress = state.total > 0
+            ? Math.min(100, state.loaded / state.total * 100) : 0;
+          state.stage = state.total > 0 && state.loaded >= state.total ? 'initializing' : 'downloading';
+        } else if (info.status === 'done') {
+          state.progress = 100;
+          state.stage = 'initializing';
+        } else return;
         emit();
       }
     };
@@ -107,12 +139,14 @@ async function loadModel() {
     }
     state.engine = engine;
     state.ready = true;
+    state.stage = 'ready';
     state.progress = 100;
     state.loading = null;
     emit();
     return engine;
   })().catch(error => {
     state.loading = null;
+    state.stage = 'failed';
     state.error = String((error && error.message) || error);
     emit();
     throw error;
@@ -121,7 +155,7 @@ async function loadModel() {
 }
 
 /**
- * 合成一段语音。
+ * 合成一段语音。调用方应先把长文切成短句；这里仍是「一段进、一段出」。
  * @returns {Promise<{samples: Float32Array, sampleRate: number, duration: number}>}
  */
 async function synthesize(text, options = {}) {

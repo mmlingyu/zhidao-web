@@ -10,7 +10,7 @@
     "start": "node scripts/serve.js",
     "build": "node scripts/build.js",
     "check": "node scripts/check.js",
-    "test": "node test-split.js",
+    "test": "node test-split.js && node test-voice-lang.js && node test-speech-chunks.js && node test-preview-gate.js && node test-synth-queue.mjs",
     "build:face": "node build-face.js",
     "build:tts": "node build-tts.js",
     "fetch:tts": "node fetch-tts-model.js"

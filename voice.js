@@ -225,10 +225,10 @@
     evidence: text => {
       try { if (root && root.KNOWLEDGE && typeof root.KNOWLEDGE.record === 'function') root.KNOWLEDGE.record({ type: 'recited', detail: String(text).slice(0, 80) }); } catch { /* 离线不影响朗读 */ }
     },
-    // 离线引擎按需加载：第一次朗读时才拉 4.7MB 的引擎包，之后浏览器缓存。
+    // 离线引擎异步加载：页面空闲时预热，点读复用相同任务，之后浏览器缓存。
     loadOfflineEngine: async () => {
       if (typeof document === 'undefined') throw new Error('离线语音引擎只能在浏览器里运行');
-      const mod = await import('/tts/kokoro-tts.js');
+      const mod = await import('/tts/offline-client.js?v=20261113resp');
       const engine = (mod && (mod.default || mod)) || (root && root.ZhidaoTTS);
       if (!engine || typeof engine.synthesize !== 'function') throw new Error('离线语音引擎加载失败');
       return engine;
@@ -238,13 +238,14 @@
 
   /* 离线引擎状态：idle 未加载 / loading 加载中 / ready 可用 / failed 不可用。 */
   const offline = {
-    engine: null, loading: null, state: 'idle', error: '', device: '', progress: 0, ctx: null
+    engine: null, loading: null, state: 'idle', error: '', device: '', progress: 0, loaded: 0, total: 0, stage: 'idle', preparing: false, ctx: null
   };
 
   function offlineStatus() {
     return {
       state: offline.state, error: offline.error, device: offline.device,
-      progress: offline.progress, ready: offline.state === 'ready'
+      progress: offline.progress, loaded: offline.loaded, total: offline.total,
+      stage: offline.stage, preparing: offline.preparing, ready: offline.state === 'ready'
     };
   }
 
@@ -267,6 +268,7 @@
   };
   const listeners = [];
   let current = null;
+  let speechEpoch = 0;
   let fallbackToken = 0;
   let currentSubject = 'chinese';
 
@@ -454,15 +456,20 @@
 
   /** 外部中断（P4c 的 stopVoice 等）：远程音频与浏览器语音一起停，口型回 idle。 */
   function stop(opts) {
+    speechEpoch += 1;
     const options = opts || {};
     const c = current;
     if (c) {
       current = null;
       if (c.ticker) clearInterval(c.ticker);
       if (c.keepAlive) clearInterval(c.keepAlive);
-      if (c.source) {
+      if (typeof c.cancel === 'function') {
+        try { c.cancel(); } catch { /* 合成取消失败不影响停播 */ }
+      }
+      const sources = Array.isArray(c.sources) ? c.sources : (c.source ? [c.source] : []);
+      for (const source of sources) {
         // 离线引擎走 Web Audio：必须停 source，否则音频会继续播。
-        try { c.source.stop(); c.source.disconnect(); } catch { /* 已结束 */ }
+        try { source.stop(); source.disconnect(); } catch { /* 已结束 */ }
       }
       if (c.audio) {
         try { c.audio.pause(); c.audio.removeAttribute && c.audio.removeAttribute('src'); c.audio.load && c.audio.load(); } catch { /* noop */ }
@@ -573,11 +580,13 @@
     return true;
   }
 
-  /** 加载离线引擎（懒加载：第一次朗读时才拉引擎包），并等模型真正就绪。 */
+  /** 加载离线引擎（页面空闲预加载 / 第一次朗读共用同一加载任务），并等模型真正就绪。 */
   async function ensureOfflineEngine() {
     if (offline.engine && offline.state === 'ready') return offline.engine;
     if (offline.loading) return offline.loading;
     offline.state = 'loading';
+    offline.stage = 'starting';
+    offline.progress = offline.loaded = offline.total = 0;
     offline.error = '';
     emit();
     offline.loading = (async () => {
@@ -588,6 +597,9 @@
           if (!snapshot) return;
           if (snapshot.device) offline.device = snapshot.device;
           if (typeof snapshot.progress === 'number') offline.progress = snapshot.progress;
+          if (typeof snapshot.loaded === 'number') offline.loaded = snapshot.loaded;
+          if (typeof snapshot.total === 'number') offline.total = snapshot.total;
+          if (snapshot.stage) offline.stage = snapshot.stage;
           if (snapshot.error) offline.error = snapshot.error;
           emit();
         });
@@ -596,12 +608,14 @@
       // 等它就绪，状态行与进度才准确。
       if (typeof engine.load === 'function') await engine.load();
       offline.state = 'ready';
+      offline.stage = 'ready';
       offline.loading = null;
       emit();
       return engine;
     })().catch(error => {
       offline.loading = null;
       offline.state = 'failed';
+      offline.stage = 'failed';
       offline.error = String((error && error.message) || error);
       emit();
       throw error;
@@ -609,72 +623,261 @@
     return offline.loading;
   }
 
-  /** 离线合成 + Web Audio 播放；口型按音频时长同步。失败返回 false，交给上层回退。 */
+  function isDigitChar(ch) {
+    return (ch >= '0' && ch <= '9') || (ch >= '０' && ch <= '９');
+  }
+  function isOperatorChar(ch) {
+    return '+＋-−–—×÷*=＝/／'.indexOf(ch) >= 0;
+  }
+  /** 数字和运算符附近不切开，避免把「3 + 5 = 8」拆成两段。 */
+  function isMathGlue(chars, index) {
+    const ch = chars[index];
+    if (ch !== ' ' && ch !== '\u3000' && !isDigitChar(ch) && !isOperatorChar(ch) && ch !== '.') return false;
+    let sawDigit = false;
+    let sawOp = false;
+    const from = Math.max(0, index - 3);
+    const to = Math.min(chars.length - 1, index + 3);
+    for (let i = from; i <= to; i++) {
+      if (isDigitChar(chars[i])) sawDigit = true;
+      else if (isOperatorChar(chars[i])) sawOp = true;
+    }
+    return sawDigit && sawOp;
+  }
+
+  function takeSentences(source) {
+    const chars = Array.from(source);
+    const sentences = [];
+    let buf = '';
+    const push = () => {
+      const piece = buf.trim();
+      if (piece) sentences.push(piece);
+      buf = '';
+    };
+    for (let i = 0; i < chars.length; i++) {
+      const ch = chars[i];
+      buf += ch;
+      if (ch === '\n' || ch === '。' || ch === '！' || ch === '？' || ch === '!' || ch === '?') {
+        push();
+        continue;
+      }
+      if (ch !== '.' && ch !== '…') continue;
+      if (ch === '.') {
+        const prev = chars[i - 1] || '';
+        const next = chars[i + 1] || '';
+        if (isDigitChar(prev) && isDigitChar(next)) continue;
+        if (/[A-Za-z]/.test(prev)) {
+          let k = i - 1;
+          while (k >= 0 && /[A-Za-z]/.test(chars[k])) k -= 1;
+          const word = chars.slice(k + 1, i).join('').toLowerCase();
+          if (word === 'mr' || word === 'mrs' || word === 'ms' || word === 'dr' || word === 'st' || word === 'vs' || word === 'etc') continue;
+        }
+      }
+      push();
+    }
+    if (buf.trim()) sentences.push(buf.trim());
+    return sentences;
+  }
+
+  function splitLongPiece(sentence, limit) {
+    const chars = Array.from(sentence);
+    if (chars.length <= limit) return sentence.trim() ? [sentence.trim()] : [];
+    const out = [];
+    let start = 0;
+    while (start < chars.length) {
+      if (chars.length - start <= limit) {
+        const tail = chars.slice(start).join('').trim();
+        if (tail) out.push(tail);
+        break;
+      }
+      let cut = -1;
+      const end = Math.min(chars.length - 1, start + limit);
+      for (let i = end; i > start + 12; i--) {
+        if (isMathGlue(chars, i)) continue;
+        const ch = chars[i];
+        if (' \u3000，,、；;：:'.indexOf(ch) >= 0) { cut = i + 1; break; }
+      }
+      if (cut < 0) cut = Math.min(chars.length, start + limit);
+      while (cut < chars.length && isMathGlue(chars, cut)) cut += 1;
+      if (cut <= start) cut = Math.min(chars.length, start + 1);
+      const piece = chars.slice(start, cut).join('').trim();
+      if (piece) out.push(piece);
+      start = cut;
+      while (start < chars.length && (chars[start] === ' ' || chars[start] === '\u3000')) start += 1;
+    }
+    return out;
+  }
+
+  /**
+   * 先读第一句，其余按约 160 字排队。长句在空格或标点处切开，不拆数字和运算符。
+   * 这样第一小段可以先出声，不用等整篇讲解合成完。
+   */
+  function splitSpeakChunks(text, options) {
+    const source = String(text == null ? '' : text).trim();
+    if (!source) return [];
+    const opts = options || {};
+    const firstLimit = Math.max(40, Number(opts.firstLimit) || 80);
+    const groupLimit = Math.max(firstLimit, Number(opts.groupLimit) || 160);
+    const sentences = takeSentences(source);
+    const pieces = [];
+    for (const sentence of sentences) {
+      const limit = pieces.length === 0 ? firstLimit : groupLimit;
+      pieces.push(...splitLongPiece(sentence, limit));
+    }
+    if (pieces.length <= 1) return pieces;
+    const grouped = [];
+    let bucket = '';
+    for (const part of pieces.slice(1)) {
+      const next = bucket ? `${bucket} ${part}` : part;
+      if (bucket && Array.from(next).length > groupLimit) {
+        grouped.push(bucket);
+        bucket = part;
+      } else bucket = next;
+    }
+    if (bucket) grouped.push(bucket);
+    return [pieces[0], ...grouped];
+  }
+
+  /** 离线合成 + Web Audio 播放。第一句先播，后面的句子在 Worker 里排队。 */
   async function speakOffline(text, token, voiceId) {
+    const epoch = speechEpoch;
+    const session = { token, source: null, sources: [], ctx: null, ticker: null, cancel() {} };
+    current = session;
+    let aborted = false;
+    session.cancel = () => {
+      aborted = true;
+      const engine = offline.engine;
+      if (engine && typeof engine.cancelSynthesize === 'function') {
+        try { engine.cancelSynthesize(); } catch { /* 线程已退出 */ }
+      }
+    };
+    const alive = () => !aborted && current === session && epoch === speechEpoch;
     let engine;
     try {
       engine = await ensureOfflineEngine();
-    } catch { return false; }
-    let result;
+    } catch { if (current === session) current = null; return false; }
+    offline.engine = engine;
+    if (!alive()) return false;
     let usedVoice = voiceId || settings.voice;
-    if (containsChinese(text) && voiceLang(usedVoice) === 'en') {
-      usedVoice = chineseVoiceId();
-    }
-    try {
-      result = await engine.synthesize(text, { voice: usedVoice, speed: settings.speed });
-    } catch (error) {
-      // Phonon 等英文音色遇到汉字会抛错：立刻换语文音色再试一次。
-      if (containsChinese(text) && voiceLang(usedVoice) === 'en') {
-        try {
-          usedVoice = chineseVoiceId();
-          result = await engine.synthesize(text, { voice: usedVoice, speed: settings.speed });
-        } catch (retryError) {
-          offline.error = String((retryError && retryError.message) || retryError);
-          emit();
-          return false;
-        }
-      } else {
-        offline.error = String((error && error.message) || error);
-        emit();
-        return false;
-      }
-    }
-    const samples = result && result.samples;
-    const sampleRate = Number(result && result.sampleRate) || 24000;
-    if (!samples || !samples.length) return false;
+    if (containsChinese(text) && voiceLang(usedVoice) === 'en') usedVoice = chineseVoiceId();
+    const chunks = splitSpeakChunks(text);
+    if (!chunks.length) { if (current === session) current = null; return false; }
     const Ctor = deps.audioContext();
-    if (!Ctor) return false;
+    if (!Ctor) { if (current === session) current = null; return false; }
     const ctx = offline.ctx || (offline.ctx = new Ctor());
+    session.ctx = ctx;
     if (ctx.state === 'suspended' && typeof ctx.resume === 'function') {
       try { await ctx.resume(); } catch { /* 自动播放被拦截时浏览器会拒绝 */ }
     }
-    const buffer = ctx.createBuffer(1, samples.length, sampleRate);
-    if (typeof buffer.copyToChannel === 'function') buffer.copyToChannel(samples, 0);
-    else { const channel = buffer.getChannelData(0); channel.set(samples); }
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    source.connect(ctx.destination);
-    const session = { token, source, ctx, ticker: null };
-    current = session;
-    source.onended = () => finish(token, true);
-    source.start();
-    // 口型：离线音频没有 boundary 事件，按音频时长把文本进度喂给口型接口。
+    if (!alive()) return false;
+
     const mascot = deps.mascot();
     const chars = Math.max(1, Array.from(text).length);
-    const durationMs = Math.max(200, (Number(result.duration) || samples.length / sampleRate) * 1000);
-    const tickMs = 130;
-    const charsPerTick = Math.max(1, Math.ceil(chars / Math.max(1, durationMs / tickMs)));
-    let index = 0;
-    session.ticker = setInterval(() => {
-      if (current !== session) { clearInterval(session.ticker); return; }
-      index = Math.min(chars, index + charsPerTick);
-      if (mascot && typeof mascot.speechBoundary === 'function') {
-        mascot.speechBoundary({ charIndex: index, charLength: 1 }, token);
+    const segments = [];
+    let charPos = 0;
+    let cursor = 0;
+    let started = false;
+    let synthesisDone = false;
+    let scheduled = 0;
+    let ended = 0;
+
+    const maybeFinish = () => {
+      if (!alive()) return;
+      if (synthesisDone && ended >= scheduled) finish(token, true);
+    };
+    const armTicker = () => {
+      if (session.ticker) return;
+      session.ticker = setInterval(() => {
+        if (current !== session) { clearInterval(session.ticker); return; }
+        const now = ctx.currentTime;
+        let index = 0;
+        for (const seg of segments) {
+          if (now >= seg.end) index = seg.charEnd;
+          else if (now >= seg.start) {
+            const span = Math.max(0.001, seg.end - seg.start);
+            const ratio = Math.min(1, Math.max(0, (now - seg.start) / span));
+            index = seg.charStart + Math.round((seg.charEnd - seg.charStart) * ratio);
+            break;
+          }
+        }
+        index = Math.min(chars, index);
+        if (mascot && typeof mascot.speechBoundary === 'function') {
+          mascot.speechBoundary({ charIndex: index, charLength: 1 }, token);
+        }
+      }, 130);
+    };
+    const playChunk = (chunkText, result) => {
+      const raw = result && result.samples;
+      if (!raw || !raw.length) return false;
+      const samples = raw instanceof Float32Array ? raw : new Float32Array(raw);
+      const sampleRate = Number(result.sampleRate) || 24000;
+      const buffer = ctx.createBuffer(1, samples.length, sampleRate);
+      if (typeof buffer.copyToChannel === 'function') buffer.copyToChannel(samples, 0);
+      else buffer.getChannelData(0).set(samples);
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(ctx.destination);
+      const when = Math.max(ctx.currentTime + 0.03, cursor || (ctx.currentTime + 0.03));
+      const duration = samples.length / sampleRate;
+      const charStart = charPos;
+      const charEnd = Math.min(chars, charPos + Array.from(chunkText).length);
+      charPos = charEnd;
+      segments.push({ start: when, end: when + duration, charStart, charEnd });
+      cursor = when + duration;
+      scheduled += 1;
+      source.onended = () => { ended += 1; maybeFinish(); };
+      try { source.start(when); }
+      catch { return false; }
+      session.sources.push(source);
+      session.source = source;
+      if (!started) {
+        started = true;
+        offline.preparing = false;
+        emit();
+        armTicker();
+        deps.evidence(text);
+        deps.toast('正在朗读（离线合成），知知会跟着一起说');
       }
-      if (index >= chars) { clearInterval(session.ticker); session.ticker = null; }
-    }, tickMs);
-    deps.evidence(text);
-    deps.toast('正在朗读（离线合成），知知会跟着一起说');
+      return true;
+    };
+
+    for (let i = 0; i < chunks.length; i++) {
+      if (!alive()) return started;
+      let result;
+      try {
+        result = await engine.synthesize(chunks[i], { voice: usedVoice, speed: settings.speed });
+      } catch (error) {
+        if (error && error.name === 'AbortError') return started;
+        if (!started && containsChinese(text) && voiceLang(usedVoice) === 'en') {
+          try {
+            usedVoice = chineseVoiceId();
+            result = await engine.synthesize(chunks[i], { voice: usedVoice, speed: settings.speed });
+          } catch (retryError) {
+            if (retryError && retryError.name === 'AbortError') return started;
+            offline.error = String((retryError && retryError.message) || retryError);
+            emit();
+            if (current === session) current = null;
+            return false;
+          }
+        } else if (!started) {
+          offline.error = String((error && error.message) || error);
+          emit();
+          if (current === session) current = null;
+          return false;
+        } else {
+          offline.error = String((error && error.message) || error);
+          emit();
+          break;
+        }
+      }
+      if (!alive()) return started;
+      if (!playChunk(chunks[i], result)) {
+        if (!started) { if (current === session) current = null; return false; }
+        break;
+      }
+    }
+    synthesisDone = true;
+    if (!started) { if (current === session) current = null; return false; }
+    maybeFinish();
     return true;
   }
 
@@ -730,6 +933,7 @@
     const text = prepareSpeakText(value);
     if (!text.trim()) return false;
     stop({ quiet: true });
+    const epoch = speechEpoch;
     const token = beginSpeech(text);
     const subject = SUBJECTS[options.subject] ? options.subject : currentSubject;
     const forced = options.voice && options.voice !== AUTO ? options.voice : '';
@@ -739,10 +943,19 @@
 
     // 1) 离线引擎（默认）：模型与音色都在本机浏览器里，不依赖任何服务。
     if (settings.mode === 'offline') {
-      const ok = await speakOffline(text, token, voiceId);
+      offline.preparing = true;
+      emit();
+      let ok;
+      try { ok = await speakOffline(text, token, voiceId); }
+      finally {
+        if (epoch === speechEpoch) { offline.preparing = false; emit(); }
+      }
+      if (epoch !== speechEpoch) return false;
       if (ok) return true;
       deps.toast('离线语音不可用，已切换到本地语音服务');
     }
+
+    if (epoch !== speechEpoch) return false;
 
     // 2) 本地 Kokoro 服务。
     const usable = settings.mode !== 'browser' && service.available
@@ -765,11 +978,17 @@
 
   /** 重置离线引擎（重新加载模型 / 换设备 / 出错后重试）。 */
   function resetOffline() {
+    const engine = offline.engine;
+    if (engine && typeof engine.reset === 'function') {
+      try { engine.reset(); } catch { /* 线程已退出 */ }
+    }
     offline.engine = null;
     offline.loading = null;
     offline.state = 'idle';
     offline.error = '';
-    offline.progress = 0;
+    offline.progress = offline.loaded = offline.total = 0;
+    offline.stage = 'idle';
+    offline.preparing = false;
     if (offline.ctx && typeof offline.ctx.close === 'function') {
       try { offline.ctx.close(); } catch { /* 忽略 */ }
     }
@@ -782,7 +1001,7 @@
     DEFAULT_BASE, STORE_KEY, BUILTIN_VOICES: BUILTIN_VOICES.slice(),
     SUBJECTS, SUBJECT_KEYS, DEFAULT_SUBJECT_VOICES, MODES,
     classifyVoice, groupVoices, groupsForLang, normalize,
-    detectLang, containsChinese, isAllEnglish, prepareSpeakText, voiceLang, resolveVoice, voiceForSpeech, chineseVoiceId, pickAvailable,
+    detectLang, containsChinese, isAllEnglish, prepareSpeakText, splitSpeakChunks, voiceLang, resolveVoice, voiceForSpeech, chineseVoiceId, pickAvailable,
     status, refresh, probe, configure, onChange, setDeps, setSubject,
     offlineStatus, effectiveMode, ensureOfflineEngine, resetOffline,
     speak, stop, prepare, speakBrowser, speakRemote, speakOffline

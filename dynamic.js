@@ -724,12 +724,50 @@ function updateLoadingAfterRoute(evt) {
 }
 
 
+function yieldToMain() {
+  return new Promise(resolve => {
+    const finish = () => resolve();
+    if (typeof scheduler !== 'undefined' && typeof scheduler.yield === 'function') {
+      scheduler.yield().then(finish);
+      return;
+    }
+    setTimeout(finish, 0);
+  });
+}
+
+function patchPreviewBanner(data) {
+  const banner = document.querySelector('.topic-banner');
+  if (!banner || !data) return false;
+  const title = banner.querySelector('.topic-title-row h3');
+  const sub = banner.querySelector('.topic-title-row span');
+  const p = banner.querySelector('.topic-info > p');
+  if (title && data.bannerTitle && title.textContent !== data.bannerTitle) title.textContent = data.bannerTitle;
+  if (sub && data.subtitle && sub.textContent !== data.subtitle) sub.textContent = data.subtitle;
+  if (p && data.description && p.textContent !== data.description) p.textContent = data.description;
+  return true;
+}
+
 function applyEarlyLessonPreview(payload) {
   if (!payload || !payload.data || !payload.subject) return;
   // 完整课已到才忽略迟到的预览。上一课的完整结果不能挡住这一课的提前出卡：
   // 开始新生成时 setAILoading 已清掉 fullLessonReady 和 dynamic。
   if (state.fullLessonReady) {
     console.log('[preview-flow] 完整课已到，忽略迟到的预览', payload.subject);
+    return;
+  }
+  const gate = window.ZHIDAO_PREVIEW_GATE;
+  if (gate && typeof gate.previewReady === 'function' && !gate.previewReady(payload)) return;
+  if (state.earlyPreviewShown && state.topic === payload.subject) {
+    const prev = (state.dynamic && state.dynamic.data) || {};
+    const next = payload.data || {};
+    const same = prev.bannerTitle === next.bannerTitle && prev.subtitle === next.subtitle && prev.description === next.description;
+    state.dynamic = {
+      ...payload,
+      partial: true,
+      input: payload.input || state.dynamic?.input || $('#topic-input')?.value || '',
+      data: { ...prev, ...next }
+    };
+    if (!same) patchPreviewBanner(next);
     return;
   }
   state.earlyPreviewShown = true;
@@ -992,13 +1030,33 @@ function dropStreamPreview(preview) {
 }
 
 /** 解析 text/event-stream：stage 事件实时驱动进度，result 事件为最终课程 JSON。
- *  a2ui:chunk 是叠加通道，逐条 feed 到临时预览 surface；a2ui 仍是权威整包消息流。 */
-async function readStageStream(response, onStage, onPreview) {
+ *  a2ui:chunk 先攒一批再渲染一次，并在批次之间把主线程交还浏览器。a2ui 仍是权威整包消息流。 */
+async function readStageStream(response, onStage, onPreview, isCurrent) {
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '', result = null, streamError = null, a2ui = null, play = null;
   let preview = null, chunkCount = 0, renderedChunks = 0, a2uiBegin = null, a2uiEnd = null;
+  let chunkBatch = [];
+  let latestPreview = null;
+  let processed = 0;
+  const alive = () => typeof isCurrent !== 'function' || isCurrent();
+  const flushChunks = () => {
+    if (!chunkBatch.length) return;
+    const messages = chunkBatch;
+    chunkBatch = [];
+    if (!preview || !preview.box || !preview.box.isConnected) return;
+    try { preview.surface.feed(messages); renderedChunks += messages.length; }
+    catch { /* 预览是增强通道，失败绝不影响课程主流程 */ }
+  };
+  const flushPreview = () => {
+    if (!latestPreview || typeof onPreview !== 'function') return;
+    const payload = latestPreview;
+    latestPreview = null;
+    try { onPreview(payload); }
+    catch (error) { console.warn('early preview failed', error); }
+  };
   for (;;) {
+    if (!alive()) { try { reader.cancel(); } catch { /* 流已结束 */ } break; }
     const { done, value } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
@@ -1022,16 +1080,24 @@ async function readStageStream(response, onStage, onPreview) {
         try {
           const message = JSON.parse(payload.line);
           if (!preview && !state.earlyPreviewShown) preview = createStreamPreview();
-          if (preview) { preview.surface.feed(message); renderedChunks++; }
+          if (preview && preview.box && preview.box.isConnected) chunkBatch.push(message);
         } catch { /* 预览是增强通道，失败绝不影响课程主流程 */ }
       } else if (event === 'a2ui:end') a2uiEnd = payload;
-      else if (event === 'preview') {
-        try { if (typeof onPreview === 'function') onPreview(payload); }
-        catch (error) { console.warn('early preview failed', error); }
-      }
+      else if (event === 'preview') latestPreview = payload;
       else if (event === 'result') result = payload;
       else if (event === 'error') streamError = payload;
+      processed += 1;
+      if (processed % 6 === 0) {
+        flushChunks();
+        flushPreview();
+        await yieldToMain();
+        if (!alive()) { try { reader.cancel(); } catch { /* 流已结束 */ } break; }
+      }
     }
+  }
+  if (alive()) {
+    flushChunks();
+    flushPreview();
   }
   // 预览层只属于生成阶段：正式渲染前销毁，保证最终 DOM 与视觉基线一致。
   dropStreamPreview(preview);
@@ -1181,22 +1247,36 @@ function rerenderCurrentDynamic() {
 function mountKnowledgeBridge() {
   const bridge = window.ZHIDAO_A2UI_BRIDGE;
   if (!bridge || !state.dynamic) return;
-  try {
-    // 把「本浏览器渲染得出哪些组件」一并交给桥接层（implemented，与年级无关）：
-    // 服务端消息流若含本端画不了的组件，就丢弃并回退本地编译，避免出现空白格子。
-    const rendererCaps = window.ZHIDAO_A2UI_CATALOG?.rendererCapabilities?.(window.LEARNER?.grade?.() || '');
-    bridge.mount(state.dynamic, {
-      quizIndex: Number(state.quizIndex) || 0,
-      quizAnswered: state.quizAnswered || state.quizDone.length > 0,
-      rendererComponents: rendererCaps?.implemented || rendererCaps?.components || null,
-      // 与请求体带上服务端的掌握度同源，保证关卡触发结论不出现两端分歧。
-      mastery: currentMasteryFor(state.dynamic?.input || ''),
-      // 服务端下发的消息流按 JSONL 逐条喂给 renderer（与 SSE 逐块推送同构）。
-      stream: !!state.dynamic.a2ui?.jsonl
-    });
-  } catch (error) {
-    console.warn('A2UI 组件区编译失败，已保留原有知识展示', error);
-  }
+  const lessonId = state.currentId;
+  const input = state.dynamic.input;
+  const subject = state.dynamic.subject;
+  const run = () => {
+    if (state.currentId !== lessonId || !state.dynamic) return;
+    if (state.dynamic.input !== input || state.dynamic.subject !== subject) return;
+    if (!document.getElementById('lesson-content')) return;
+    try {
+      // 把「本浏览器渲染得出哪些组件」一并交给桥接层（implemented，与年级无关）：
+      // 服务端消息流若含本端画不了的组件，就丢弃并回退本地编译，避免出现空白格子。
+      const rendererCaps = window.ZHIDAO_A2UI_CATALOG?.rendererCapabilities?.(window.LEARNER?.grade?.() || '');
+      bridge.mount(state.dynamic, {
+        quizIndex: Number(state.quizIndex) || 0,
+        quizAnswered: state.quizAnswered || state.quizDone.length > 0,
+        rendererComponents: rendererCaps?.implemented || rendererCaps?.components || null,
+        // 与请求体带上服务端的掌握度同源，保证关卡触发结论不出现两端分歧。
+        mastery: currentMasteryFor(state.dynamic?.input || ''),
+        // 最终挂载只渲染一次。生成过程中的逐块预览已经在 SSE 里做过。
+        stream: false
+      });
+    } catch (error) {
+      console.warn('A2UI 组件区编译失败，已保留原有知识展示', error);
+    }
+  };
+  const schedule = () => {
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 450 });
+    else setTimeout(run, 16);
+  };
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(schedule);
+  else schedule();
 }
 
 function appendFollowup() {
@@ -1343,7 +1423,7 @@ async function startLesson(forceRefresh = false) {
     const isStageStream = (response.headers.get('content-type') || '').includes('text/event-stream');
     let result;
     if (isStageStream) {
-      result = await readStageStream(response, applyStageEvent, applyEarlyLessonPreview);
+      result = await readStageStream(response, applyStageEvent, applyEarlyLessonPreview, () => sequence === requestSequence && !controller.signal.aborted);
     } else {
       result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || apiErrorMessage(response.status));
@@ -1379,6 +1459,40 @@ function showServiceError(value, error) {
   openModal(isAddress ? '接口地址没对上' : '暂时无法生成', '提示', `<div class="empty-state"><span class="empty-icon">${icon('sparkles')}</span><h3>暂时无法生成「${e(value.slice(0, 40))}」</h3><p>${e(message)}</p>${advice}</div>`);
 }
 
+let chineseSurfaceToken = 0;
+function scheduleChineseSurface(data, list) {
+  const token = ++chineseSurfaceToken;
+  const lessonId = state.currentId;
+  const run = () => {
+    if (token !== chineseSurfaceToken || state.currentId !== lessonId) return;
+    const host = $('#a2ui-surface');
+    if (!host || !window.ZHIDAO_A2UI || !window.ZHIDAO_A2UI_COMPILER) return;
+    const learnerGrade = window.LEARNER?.grade?.() || '';
+    const a2uiCapabilities = window.ZHIDAO_A2UI_CATALOG?.rendererCapabilities?.(learnerGrade);
+    let a2uiMessages = null;
+    try {
+      a2uiMessages = window.ZHIDAO_A2UI_COMPILER.compileLessonToA2UI(data, {
+        grade: learnerGrade, subject: 'chinese', capabilities: a2uiCapabilities
+      });
+    } catch (error) {
+      console.warn('A2UI 诗文区编译失败，已保留成语卡片', error);
+      return;
+    }
+    if (token !== chineseSurfaceToken || !a2uiMessages) return;
+    if (a2uiSurface) a2uiSurface.destroy();
+    a2uiSurface = window.ZHIDAO_A2UI.createSurface(host, { capabilities: a2uiCapabilities });
+    a2uiSurface.onAction((message, meta) => handleChineseA2UIAction(message, meta, list, a2uiSurface));
+    a2uiSurface.feed(a2uiMessages);
+    window.ZHIDAO_A2UI_SURFACE = a2uiSurface;
+  };
+  const schedule = () => {
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 450 });
+    else setTimeout(run, 16);
+  };
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(schedule);
+  else schedule();
+}
+
 function renderDynamicChinese() {
   const data = state.dynamic.data;
   const list = Array.isArray(data.idioms) ? data.idioms : [];
@@ -1391,30 +1505,14 @@ function renderDynamicChinese() {
   state.aiChineseSelected = Math.max(0, visible.indexOf(selected));
   /* 「诗文与名句 + 试着写一句」改由 A2UI 组件协议渲染（P0 试点）。
    * 年级提示、诗句朗读文本、完成门槛全部由确定性编译器从课程 JSON + 年级算出，
-   * 浏览器不再手写模板字符串，也不再用 CSS 隐藏内容来做「适龄减负」。 */
-  const learnerGrade = window.LEARNER?.grade?.() || '';
-  const a2uiCapabilities = window.ZHIDAO_A2UI_CATALOG?.rendererCapabilities?.(learnerGrade);
-  const a2uiMessages = window.ZHIDAO_A2UI_COMPILER
-    ? window.ZHIDAO_A2UI_COMPILER.compileLessonToA2UI(data, {
-        grade: learnerGrade, subject: 'chinese', capabilities: a2uiCapabilities
-      })
-    : null;
+   * 浏览器不再手写模板字符串，也不再用 CSS 隐藏内容来做「适龄减负」。
+   * 编译放到首屏卡片之后，避免和离线朗读抢同一段主线程。 */
   $('#lesson-content').innerHTML = renderDynamicBanner() + `<div class="lesson-body"><section class="content-card" data-speech-key="module-1">
     <div class="card-heading"><div class="card-title"><span class="number">01</span><div><h4>表达素材库 <small>围绕主题，找到更准确的表达</small></h4></div></div><div class="card-heading-actions">${speechPlayButton('module-1', '朗读表达素材')}<div class="filter-pills">${tags.map(tag => `<button data-ai-filter="${e(tag)}" class="${state.aiChineseFilter === tag ? 'active' : ''}">${tag === 'all' ? '全部' : e(tag)}</button>`).join('')}</div></div></div>
     <div class="idiom-grid">${visible.map((item, index) => `<button class="idiom-card ${index === state.aiChineseSelected ? 'active' : ''}" data-ai-idiom="${index}" data-speech-item="idiom-${index}"><span class="idiom-tag">${e(item.tag)}</span><h5>${e(item.word)}</h5><div class="pinyin">${e(item.pinyin)}</div><p>${e(item.meaning)}</p><div class="intensity">${[1,2,3].map(n => `<i class="${n <= Number(item.level || 1) ? 'on' : ''}"></i>`).join('')}<span>表达强度</span></div></button>`).join('')}</div>
     <div class="idiom-detail"><span class="detail-quote">“</span><div><strong>${e(selected.example)}</strong><p>${icon('bulb')} ${e(selected.scene)}</p></div>${speechPlayButton('idiom-' + state.aiChineseSelected, '朗读这条表达')}</div></section>
     <div class="two-column" id="a2ui-surface"></div></div>`;
-  // A2UI surface：组件树、数据模型、action 全走协议；此处只负责把课程交给编译器。
-  if (a2uiMessages && window.ZHIDAO_A2UI) {
-    if (a2uiSurface) a2uiSurface.destroy();
-    a2uiSurface = window.ZHIDAO_A2UI.createSurface($('#a2ui-surface'), {
-      capabilities: a2uiCapabilities
-    });
-    a2uiSurface.onAction((message, meta) => handleChineseA2UIAction(message, meta, list, a2uiSurface));
-    a2uiSurface.feed(a2uiMessages);
-    // 调试 / 后续 SSE 流式需要拿到当前 surface，P1 会从这里接管消息流。
-    window.ZHIDAO_A2UI_SURFACE = a2uiSurface;
-  }
+  scheduleChineseSurface(data, list);
   $$('[data-ai-filter]').forEach(button => button.addEventListener('click', () => { state.aiChineseFilter = button.dataset.aiFilter; state.aiChineseSelected = 0; renderDynamicChinese(); }));
   $$('[data-ai-idiom]').forEach(button => button.addEventListener('click', () => {
     state.aiChineseSelected = Number(button.dataset.aiIdiom);
