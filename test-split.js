@@ -1,6 +1,7 @@
 require('./test-quiz-display.js');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const path = require('node:path');
 const vm = require('node:vm');
 const {execFileSync} = require('node:child_process');
 const ctx={window:{ZHIDAO_API_BASE:'https://api.example.com/'}};
@@ -9,12 +10,20 @@ assert.equal(ctx.window.ZHIDAO_API_URL('/api/grades'),'https://api.example.com/a
 ctx.window.ZHIDAO_API_BASE='';assert.equal(ctx.window.ZHIDAO_API_URL('/api/grades'),'/api/grades');
 execFileSync(process.execPath,['scripts/build.js'],{stdio:'inherit'});
 const html=fs.readFileSync('dist/index.html','utf8');
-for(const m of html.matchAll(/(?:src|href)="([^"?#]+)(?:\?[^\"]*)?"/g)) if(!m[1].includes(':')&&!m[1].startsWith('#')) assert.ok(fs.existsSync('dist/'+m[1]),m[1]);
-for(const p of ['model/tiny_face_detector_model.bin','vendor/face-api.esm.js','tts/kokoro-tts.js','tts/kokoro-worker.js','tts/offline-client.js','tts/synth-queue.mjs','config.js','lesson-preview-gate.js','voice-progress.js']) assert.ok(fs.existsSync('dist/'+p),p);
+for(const m of html.matchAll(/(?:src|href)="([^"?#]+)(?:\?[^\"]*)?"/g)) {
+  if(m[1].includes(':')||m[1].startsWith('#')) continue;
+  assert.ok(fs.existsSync(path.join('dist', m[1].replace(/^\//,''))), m[1]);
+}
+for(const p of ['model/tiny_face_detector_model.bin','vendor/face-api.esm.js','tts/kokoro-tts.js','tts/kokoro-worker.js','tts/offline-client.js','tts/synth-queue.mjs','tts/lesson-preview-gate.js','tts/voice-progress.js','config.js']) assert.ok(fs.existsSync('dist/'+p),p);
+assert.ok(!fs.existsSync('dist/lesson-preview-gate.js'));
+assert.ok(!fs.existsSync('dist/voice-progress.js'));
+assert.ok(!fs.existsSync('lesson-preview-gate.js'));
+assert.ok(!fs.existsSync('voice-progress.js'));
 assert.match(html, /豫ICP备2026048965号-1/);
 assert.match(html, /https:\/\/beian\.miit\.gov\.cn\//);
 assert.match(html, /voice\.js\?v=20261113ver2/);
-assert.match(html, /lesson-preview-gate\.js\?v=20261113ver/);
+assert.match(html, /\/tts\/lesson-preview-gate\.js\?v=20261113tts/);
+assert.match(html, /\/tts\/voice-progress\.js\?v=20261113tts/);
 assert.match(html, /dynamic\.js\?v=20261113resp/);
 assert.doesNotMatch(html, /Cross-Origin-Opener-Policy|Cross-Origin-Embedder-Policy/);
 assert.match(fs.readFileSync('dist/config.js','utf8'), /ZHIDAO_API_BASE = ''/);
