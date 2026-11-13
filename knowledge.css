@@ -131,18 +131,22 @@ html[data-celebration="none"] .zf-spark,
 html[data-celebration="none"] .zf-burst { display: none; }
 html[data-celebration="none"] .zf-float { font-size: 12px; padding: 7px 12px; }
 
-/* ==================== 2. 顶栏年级选择器 ==================== */
-.learner-picker {
+/* ==================== 2. 顶栏只读学习阶段 ==================== */
+.learner-stage {
   display: inline-flex; align-items: center; gap: 6px;
   height: 32px; padding: 0 10px; border: 1px solid var(--line);
   border-radius: 999px; background: var(--white); color: var(--ink); font-size: 11px;
+  max-width: min(100%, 220px); box-sizing: border-box;
 }
-.learner-picker svg { width: 14px; height: 14px; color: var(--purple); }
-.learner-picker select {
-  border: 0; background: transparent; font: inherit; color: inherit;
-  outline: 0; cursor: pointer; max-width: 92px;
+.learner-stage svg { width: 14px; height: 14px; color: var(--purple); flex: none; }
+.learner-stage-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.learner-stage.is-missing { color: #6f6a62; }
+.learner-stage-setup {
+  border: 0; background: #f3eefe; color: var(--purple); border-radius: 999px;
+  font: inherit; font-size: 10px; line-height: 1.4; padding: 2px 8px; cursor: pointer; flex: none;
 }
-.learner-picker .learner-hint { display: none; }
+.learner-stage-setup[hidden] { display: none; }
+.learner-stage-setup:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
 
 /* ==================== 3. 知识库入口 ==================== */
 #knowledge-entry .zk-entry-count {
@@ -322,8 +326,7 @@ body.zk-open { overflow: hidden; }
 
 /* ==================== 6. 移动端 ==================== */
 @media (max-width: 760px) {
-  .learner-picker { height: 30px; padding: 0 8px; }
-  .learner-picker select { max-width: 76px; }
+  .learner-stage { height: 30px; padding: 0 8px; max-width: 46vw; }
   .zk-overlay { padding: 0; }
   .zk-shell { width: 100%; height: 100%; max-height: 100vh; border-radius: 0; }
   .zk-head { padding: 16px; flex-direction: column; gap: 12px; }
