@@ -107,12 +107,7 @@ const LEARNER = (() => {
       return;
     }
     if (setup) setup.hidden = false;
-    if (value === 'preschool') {
-      label.textContent = '学前不设阶段';
-      host.title = '学前年级不对应虚拟阶段';
-      host.setAttribute('aria-label', '学前不设阶段');
-      if (setup) setup.hidden = true;
-    } else if (value) {
+    if (value) {
       label.textContent = '暂无对应阶段';
       host.title = '当前年级还没有对应的学习阶段';
       host.setAttribute('aria-label', '暂无对应阶段');

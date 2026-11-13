@@ -277,8 +277,9 @@ function lessonFieldPrompt(grade, subject) {
 }
 
 /* 账号里的真实年级 id → 首页只读「虚拟阶段」。
- * 一年级是一阶，二年级是二阶，一路到九年级九阶；高中接在后面。
- * 学前和未知年级不编造阶段。课程请求仍使用原来的 grade id，不用这串文案。 */
+ * 学前显示 0阶，一年级是一阶，二年级是二阶，一路到九年级九阶；高中接在后面。
+ * 这只是展示文案。课程、模型和画像仍使用 preschool / grade1 这些 id。
+ * 空值和未知 id 不编造阶段。 */
 const VIRTUAL_STAGES = {
   grade1: '一阶',
   grade2: '二阶',
@@ -296,7 +297,8 @@ const VIRTUAL_STAGES = {
 
 function virtualStageForGrade(grade) {
   const key = String(grade || '').trim();
-  if (!key || key === 'preschool') return null;
+  if (!key) return null;
+  if (key === 'preschool') return '0阶';
   return VIRTUAL_STAGES[key] || null;
 }
 

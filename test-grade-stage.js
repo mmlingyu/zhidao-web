@@ -31,8 +31,14 @@ test('一年级到高三依次对应虚拟阶段', () => {
   }
 });
 
-test('学前、空值和未知年级不编造阶段', () => {
-  assert.equal(G.virtualStageForGrade('preschool'), null);
+test('学前只在界面上显示 0阶，模型与课程仍用 preschool', () => {
+  assert.equal(G.virtualStageForGrade('preschool'), '0阶');
+  assert.equal(G.accountGrade({ user: { role: 'student', grade: 'preschool' } }), 'preschool');
+  assert.equal(G.stageForGrade('preschool').id, 'early');
+  assert.equal(G.stageForGrade('preschool').grades[0], 'preschool');
+  assert.equal(G.promptForGrade('preschool'), G.STAGES[0].prompt);
+  assert.equal(G.promptForGrade('preschool').includes('0阶'), false);
+  assert.equal(G.uiProfileForGrade('preschool').id, 'early');
   assert.equal(G.virtualStageForGrade(''), null);
   assert.equal(G.virtualStageForGrade('kindergarten'), null);
   assert.equal(G.virtualStageForGrade('grade0'), null);
@@ -54,8 +60,8 @@ test('首页不再放年级下拉，阶段逻辑留在已有脚本里', () => {
   const html = fs.readFileSync('index.html', 'utf8');
   assert.equal(html.includes('id="learner-grade"'), false);
   assert.match(html, /id="learner-stage"/);
-  assert.match(html, /grade-profile\.js\?v=20261113stage/);
-  assert.match(html, /learner\.js\?v=20261113stage/);
+  assert.match(html, /grade-profile\.js\?v=20261113p0/);
+  assert.match(html, /learner\.js\?v=20261113p0/);
   assert.doesNotMatch(html, /src="\/tts\/grade-stage/);
 });
 
@@ -117,13 +123,15 @@ test('未登录显示未设置年级，学生二年级登录后变成二阶且�
   assert.equal(page.window.LEARNER.stage(), 'early');
 });
 
-test('学前账号不显示编造阶段，年级 id 仍传给课程', async () => {
+test('学前账号显示 0阶，课程与认知档仍是 preschool / early', async () => {
   const page = bootLearner();
   page.setSession({ user: { role: 'student', grade: 'preschool' } });
   await page.init();
-  assert.equal(page.elements['learner-stage-label'].textContent, '学前不设阶段');
+  assert.equal(page.elements['learner-stage-label'].textContent, '0阶');
+  assert.equal(page.elements['learner-stage-setup'].hidden, true);
   assert.equal(page.window.LEARNER.grade(), 'preschool');
-  assert.equal(page.window.LEARNER.virtualStage(), '');
+  assert.equal(page.window.LEARNER.virtualStage(), '0阶');
+  assert.equal(page.window.LEARNER.stage(), 'early');
 });
 
 Promise.all(pending).then(() => {
