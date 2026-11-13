@@ -127,26 +127,43 @@
       const items = Array.isArray(data.items) ? data.items : [];
       const quizzes = Array.isArray(data.quizzes) ? data.quizzes : [];
       const quiz = quizzes[0] || {};
-      const choices = Array.isArray(quiz.choices) ? quiz.choices.map(String) : [];
+      const quizLib = (typeof ZHIDAO_QUIZ !== 'undefined' && ZHIDAO_QUIZ)
+        || (typeof require === 'function' ? require('./quiz-display') : null);
+      const quizView = quizLib && quizLib.normalizeQuiz
+        ? quizLib.normalizeQuiz(quiz, '选一选，哪个词放进句子里最合适？')
+        : { sentence: String(quiz.sentence || '选一选，哪个词放进句子里最合适？'), choices: Array.isArray(quiz.choices) ? quiz.choices.map(String) : [], answer: String(quiz.answer || ''), explain: String(quiz.explain || '') };
+      const choices = (quizView.choices || []).map(String);
       const difference = data.difference || {};
       const first = items[0] || {};
-      const examples = Array.isArray(first.examples) ? first.examples : [];
+      const examples = items.flatMap(item => Array.isArray(item.examples) ? item.examples : []);
+      const firstExamples = Array.isArray(first.examples) ? first.examples : [];
+      const quizList = quizzes.map(item => {
+        if (quizLib && quizLib.normalizeQuiz) return quizLib.normalizeQuiz(item, '');
+        return {
+          sentence: String(item.sentence || item.question || ''),
+          choices: Array.isArray(item.choices) ? item.choices.map(String)
+            : (Array.isArray(item.options) ? item.options.map(String) : []),
+          answer: String(item.answer || ''),
+          explain: String(item.explain || '')
+        };
+      }).filter(item => item.sentence);
       out.data = {
         words: items.map(item => String(item.word || '')).filter(Boolean),
-        speech: examples.map(item => String(item.en || '')).filter(Boolean).join('. '),
+        speech: examples.map(item => String(item.en || item.text || '')).filter(Boolean).join('. '),
         note: String(difference.answer || data.mnemonic || ''),
-        question: String(quiz.sentence || '选一选，哪个词放进句子里最合适？'),
+        question: String(quizView.sentence || '选一选，哪个词放进句子里最合适？'),
         options: choices,
-        answer: String(quiz.answer || ''),
+        quizzes: quizList,
+        answer: String(quizView.answer || quiz.answer || ''),
         steps: items.map(item => `${item.word}：${item.description || ''}`),
-        prompt: String(quiz.explain || '把搭配放进句子里读一遍。'),
+        prompt: String(quizView.explain || quiz.explain || '把搭配放进句子里读一遍。'),
         formulaNote: String(difference.question || ''),
         wordCard: {
           word: String(first.word || 'word'),
           phonetic: '',
-          examples: examples.map(item => `${item.en || ''} · ${item.cn || ''}`),
+          examples: firstExamples.map(item => `${item.en || ''} · ${item.cn || ''}`),
           tip: String(first.tip || data.mnemonic || ''),
-          speech: examples.map(item => String(item.en || '')).filter(Boolean).join('. ')
+          speech: firstExamples.map(item => String(item.en || '')).filter(Boolean).join('. ')
         },
         pairs: items.slice(0, 3).map(item => ({
           left: String(item.word || ''), right: String(item.title || item.description || '')
@@ -199,6 +216,26 @@
     };
     out.data.games = games ? games.deriveGames(subject, data) : {};
     return out;
+  }
+
+
+  /** 主界面当前正在展示的题干与说明，交给校验层去重。
+   * 只避开「你来判一判」此刻这一道（quizIndex），把其余题留给年级组件区换题；
+   * 若把全部 quizzes 都标成已展示，换题失败后整区会被裁空。 */
+  function presentedFrom(result, opts = {}) {
+    const data = result && result.data && typeof result.data === 'object' ? result.data : {};
+    const quizzes = Array.isArray(data.quizzes) ? data.quizzes : [];
+    const index = Number.isInteger(opts.quizIndex) && opts.quizIndex >= 0 ? opts.quizIndex : 0;
+    const current = quizzes[index] || quizzes[0] || {};
+    const currentStem = String(current.sentence || current.question || data.question || data.sentence || '').trim();
+    const questions = [];
+    if (currentStem) questions.push(currentStem);
+    if (data.challenge && data.challenge.question) questions.push(String(data.challenge.question));
+    const texts = [
+      data.title, data.bannerTitle, data.description,
+      data.difference && data.difference.question
+    ].filter(Boolean).map(item => String(item));
+    return { questions, texts, quizIndex: index };
   }
 
   /**
@@ -444,11 +481,20 @@
       }
       if (name === 'answer') {
         const choice = String(c.choice || '').trim();
-        const answer = String(c.answer || '').trim();
-        const correct = !!answer && choice === answer;
+        const answer = String(c.answer || surface.getData('/knowledge/answer') || '').trim();
+        const options = surface.getData('/knowledge/options') || [];
+        const quizApi = G?.ZHIDAO_QUIZ;
+        const correct = quizApi && typeof quizApi.isCorrectChoice === 'function'
+          ? quizApi.isCorrectChoice(choice, answer, options)
+          : (!!answer && choice === answer);
+        const resolved = quizApi && typeof quizApi.resolveAnswer === 'function'
+          ? quizApi.resolveAnswer(options, answer)
+          : { choice: answer, index: (Array.isArray(options) ? options : []).indexOf(answer) };
+        const shown = resolved.index >= 0 ? resolved.choice : answer;
         const feedback = correct
           ? '答对啦，这一步你已经会了。'
-          : (answer ? `再试一次，正确答案是「${answer}」。` : '先想一想，再选一次。');
+          : (resolved.index >= 0 ? `再试一次，正确答案是「${shown}」。`
+            : (answer ? '这道题的标准答案和选项对不上，先换一题看看。' : '先想一想，再选一次。'));
         write('/practice/feedback', feedback, false);
         write('/practice/tone', correct ? 'good' : 'warn', true);
         if (correct) {
@@ -527,13 +573,47 @@
       ? served.messages
       : compiler.compileKnowledgeToA2UI(
         { subject, phase, grade, point: knowledge.point, data: knowledge.data },
-        { capabilities, surfaceId: `zhidao_bridge_${subject}_${phase}` }
+        {
+          capabilities, surfaceId: `zhidao_bridge_${subject}_${phase}`,
+          presented: presentedFrom(result, { quizIndex: options.quizIndex })
+        }
       );
     const recipe = matrix.recipeFor(subject, phase, grade);
     // 服务端编译时已经补过空态文案；本地编译才需要补（函数本身幂等）。
     if (!served) primeEmptyFeedback(messages, recipe);
-    const componentCount = served?.componentCount || messages.meta?.componentCount || 0;
-    const source = served ? 'server' : 'client';
+    // 服务端消息流也过一遍校验层（与主界面题干去重）；本地编译已经在 compiler 里跑过，再跑一次幂等。
+    const validate = G?.ZHIDAO_A2UI_VALIDATE;
+    if (validate && typeof validate.optimizeMessages === 'function') {
+      validate.optimizeMessages(messages, {
+        presented: presentedFrom(result, { quizIndex: options.quizIndex }),
+        extras: { quizzes: knowledge.data.quizzes, data: knowledge.data, items: knowledge.data.items }
+      });
+    }
+    // 服务端若按「全部题已展示」把组件裁空，这里改走本地编译，换一道当前没在展示的题。
+    let source = served ? 'server' : 'client';
+    if (served && messages.meta && messages.meta.empty) {
+      const local = compiler.compileKnowledgeToA2UI(
+        { subject, phase, grade, point: knowledge.point, data: knowledge.data },
+        {
+          capabilities, surfaceId: `zhidao_bridge_${subject}_${phase}`,
+          presented: presentedFrom(result, { quizIndex: options.quizIndex })
+        }
+      );
+      if (local && !(local.meta && local.meta.empty)) {
+        messages.splice(0, messages.length, ...local);
+        messages.meta = local.meta;
+        messages.warnings = local.warnings;
+        source = 'client';
+        primeEmptyFeedback(messages, recipe);
+        if (validate && typeof validate.optimizeMessages === 'function') {
+          validate.optimizeMessages(messages, {
+            presented: presentedFrom(result, { quizIndex: options.quizIndex }),
+            extras: { quizzes: knowledge.data.quizzes, data: knowledge.data, items: knowledge.data.items }
+          });
+        }
+      }
+    }
+    const componentCount = (messages.meta && messages.meta.componentCount) || served?.componentCount || 0;
 
     const section = el('section', 'a2ui-bridge');
     section.id = SECTION_ID;
@@ -611,6 +691,11 @@
       phaseLabel: matrix.PHASES[phase].label,
       stage, componentCount, play: !!playSurface, source
     });
+    // 校验层裁掉全部卡片后，不要留下一块空白的「知识组件」标题区。
+    if (messages.meta && messages.meta.empty) {
+      section.classList.add('a2ui-bridge-empty');
+      if (!playSurface) section.hidden = true;
+    }
     if (!isNode) {
       G.ZHIDAO_A2UI_BRIDGE_SURFACE = surface;
       if (playSurface) G.ZHIDAO_A2UI_BRIDGE_PLAY_SURFACE = playSurface;
@@ -668,7 +753,7 @@
 
   const API = {
     mount, refresh, destroy, status,
-    phaseFor, knowledgeFromLesson, shouldShowPlay, puzzleFor, stageOf,
+    phaseFor, knowledgeFromLesson, presentedFrom, shouldShowPlay, puzzleFor, stageOf,
     primeEmptyFeedback, feedJSONL, takeServerSurface, takeServerPlay, bindActions,
     SECTION_ID, SURFACE_ID, PLAY_ID
   };

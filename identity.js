@@ -28,7 +28,7 @@ const IDENTITY = (() => {
   async function ensureGrades() {
     if (grades.length) return grades;
     if (!gradesPromise) {
-      gradesPromise = fetch(window.ZHIDAO_API_URL('/api/grades'), { headers: { Accept: 'application/json' } })
+      gradesPromise = fetch((typeof window.ZHIDAO_API_URL === "function" ? window.ZHIDAO_API_URL : (p => p))('/api/grades'), { headers: { Accept: 'application/json' } })
         .then(response => (response.ok ? response.json() : null))
         .then(data => {
           if (Array.isArray(data?.grades)) grades = data.grades;
@@ -80,7 +80,7 @@ const IDENTITY = (() => {
     const token = active?.token || localStorage.getItem(TOKEN_KEY) || '';
     const headers = { 'Content-Type': 'application/json' };
     if (token) headers.Authorization = `Bearer ${token}`;
-    const response = await fetch(window.ZHIDAO_API_URL(path), {
+    const response = await fetch((typeof window.ZHIDAO_API_URL === "function" ? window.ZHIDAO_API_URL : (p => p))(path), {
       method, headers, body: body ? JSON.stringify(body) : undefined
     });
     const data = await response.json().catch(() => ({}));

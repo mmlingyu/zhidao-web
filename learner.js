@@ -127,7 +127,7 @@ const LEARNER = (() => {
   async function init() {
     manualGrade = readPicked();
     try {
-      const response = await fetch(window.ZHIDAO_API_URL('/api/grades'), { headers: { Accept: 'application/json' } });
+      const response = await fetch((typeof window.ZHIDAO_API_URL === "function" ? window.ZHIDAO_API_URL : (p => p))('/api/grades'), { headers: { Accept: 'application/json' } });
       const data = await response.json().catch(() => null);
       if (Array.isArray(data?.grades)) grades = data.grades;
     } catch { /* 离线时用画像自带的兜底 */ }

@@ -113,18 +113,19 @@
 @media(prefers-reduced-motion:reduce){.zd-svg *{animation-duration:.01ms!important;animation-iteration-count:1!important}}
 
 /* ---------- 悬浮挂件 ---------- */
-.zd-dock{position:fixed;right:20px;bottom:20px;z-index:60;display:flex;flex-direction:column;align-items:flex-end;gap:8px;font-family:var(--sans)}
-.zd-dock-bubble{max-width:210px;background:#fff;border:1px solid #e6e1ef;border-radius:14px 14px 4px 14px;padding:10px 13px;font-size:11px;line-height:1.7;color:#4a4558;box-shadow:0 10px 30px rgba(45,38,70,.13);animation:zd-pop .25s ease-out;pointer-events:none}
-.zd-dock-bubble b{display:block;font-size:9px;color:#9b92ad;letter-spacing:1px;margin-bottom:3px;font-weight:600}
-.zd-dock-card{background:#fff;border:1px solid #e8e5f0;border-radius:18px;box-shadow:0 14px 38px rgba(40,34,66,.14);padding:6px 8px 8px;display:flex;flex-direction:column;align-items:center;width:140px}
+.zd-dock{position:fixed;right:20px;bottom:20px;z-index:60;display:flex;flex-direction:column;align-items:flex-end;gap:8px;font-family:var(--sans);pointer-events:none}
+/* IP 区域保留半透明底（约六成不透明），形象本身清晰；「知知说」气泡更淡，不挡点击。 */
+.zd-dock-bubble{max-width:210px;background:rgba(255,255,255,.32);border:1px solid rgba(230,225,239,.35);border-radius:14px 14px 4px 14px;padding:10px 13px;font-size:11px;line-height:1.7;color:#3d3850;text-shadow:0 0 6px rgba(255,255,255,.85);box-shadow:none;animation:zd-pop .25s ease-out;pointer-events:none}
+.zd-dock-bubble b{display:block;font-size:9px;color:#6f687f;letter-spacing:1px;margin-bottom:3px;font-weight:600}
+.zd-dock-card{background:rgba(255,255,255,.62);border:1px solid rgba(232,229,240,.5);border-radius:18px;box-shadow:0 8px 22px rgba(40,34,66,.08);padding:6px 8px 8px;display:flex;flex-direction:column;align-items:center;width:140px;pointer-events:auto}
 .zd-dock-head{display:flex;align-items:center;justify-content:space-between;width:100%;padding:2px 4px 0}
 .zd-dock-head strong{font-size:11px;color:#4c4660;font-family:var(--serif)}
-.zd-dock-head button{border:0;background:#f4f1fb;color:#7568d8;border-radius:8px;font-size:9px;padding:4px 7px}
+.zd-dock-head button{border:0;background:rgba(244,241,251,.72);color:#7568d8;border-radius:8px;font-size:9px;padding:4px 7px}
 .zd-dock-head button:hover{background:#e9e4fa}
 .zd-dock-card>.zd-subject-tag{margin-top:5px;font-size:8px;padding:2px 7px}
 .zd-dock-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:5px;margin-top:5px;width:100%}
-.zd-dock-actions .zd-action-label{flex-basis:100%;text-align:center;white-space:normal;line-height:1.5}
-.zd-dock-actions button{border:1px solid #e9e5f1;background:#faf9fd;border-radius:999px;font-size:9px;color:#7b7191;padding:4px 8px}
+.zd-dock-actions .zd-action-label{flex-basis:100%;text-align:center;white-space:normal;line-height:1.5;background:rgba(255,255,255,.55)}
+.zd-dock-actions button{border:1px solid rgba(233,229,241,.55);background:rgba(250,249,253,.7);border-radius:999px;font-size:9px;color:#7b7191;padding:4px 8px}
 .zd-dock-actions button:hover{background:#efedff;color:#6a5ac7}
 .zd-dock.collapsed .zd-dock-card{width:auto;flex-direction:row;gap:8px;padding:8px 10px}
 .zd-dock.collapsed .zd-dock-bubble,.zd-dock.collapsed .zd-dock-card>.zd-host,.zd-dock.collapsed .zd-dock-head strong,.zd-dock.collapsed .zd-dock-card>.zd-subject-tag,.zd-dock.collapsed .zd-dock-actions{display:none}

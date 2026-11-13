@@ -78,3 +78,228 @@
 .loading-steps span small{font-size:8px;color:#a9afa8;font-variant-numeric:tabular-nums;margin-left:2px}
 .loading-steps span.active small{color:var(--purple)}
 @media(max-width:650px){.pipeline-panel{padding:16px 13px 14px;margin-top:22px}.pipeline-head h3 small{display:none}.pipeline-total b{font-size:15px}.pipeline-stage{padding:10px 11px}.pipeline-stage-top{gap:7px}.pipeline-stage-name{flex:1 1 auto}.pipeline-stage-name strong{font-size:11px}.pipeline-note{padding-right:105px}.pipeline-time{min-width:56px;font-size:13px}.pipeline-stage-bottom{gap:8px}.pipeline-status{max-width:78px;font-size:8px}}
+
+/* 你来判一判：题干与选项必须完整可见（情景题、长句、多字段别名都适用） */
+.quiz-layout{
+  grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);
+  align-items:start;
+  gap:22px;
+}
+.quiz-question{
+  min-width:0;
+  overflow:visible;
+}
+.quiz-question h4{
+  font-size:17px;
+  line-height:1.65;
+  margin:8px 0 8px;
+  overflow-wrap:anywhere;
+  word-break:break-word;
+  white-space:normal;
+  overflow:visible;
+  max-width:100%;
+}
+.quiz-question p{
+  font-size:13px;
+  line-height:1.6;
+  color:#6f6a7a;
+  margin:0;
+  overflow-wrap:anywhere;
+  word-break:break-word;
+  white-space:normal;
+}
+.choice-row{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  align-items:stretch;
+  min-width:0;
+}
+.choice-button{
+  flex:1 1 148px;
+  min-width:0;
+  white-space:normal;
+  overflow-wrap:anywhere;
+  word-break:break-word;
+  line-height:1.45;
+  text-align:center;
+}
+@media(max-width:650px){
+  .quiz-layout{grid-template-columns:1fr;gap:16px}
+}
+
+/* 搜索栏识别位：Jev 判断中的脉冲，判断完成后弹出反馈 */
+.detect-chip.is-pending{background:#f3f1ea;color:#7a7568}
+.detect-chip.is-pending i{
+  background:#c4b89a;
+  animation:chip-pulse 1s ease-in-out infinite;
+}
+.detect-chip.is-generating i,
+.detect-chip.is-confirmed i{box-shadow:0 0 0 3px rgba(139,111,224,.15)}
+.detect-chip.is-pop{animation:chip-pop .45s ease}
+@keyframes chip-pulse{
+  0%,100%{transform:scale(1);opacity:.55}
+  50%{transform:scale(1.7);opacity:1}
+}
+@keyframes chip-pop{
+  0%{transform:scale(.92);opacity:.65}
+  60%{transform:scale(1.06)}
+  100%{transform:scale(1);opacity:1}
+}
+
+/* 判断完成后加载区随学科变色 */
+.ai-loading.is-routed{transition:background .4s ease,border-color .4s ease}
+.ai-loading.is-chinese{background:#fffaf0}
+.ai-loading.is-english{background:#f7f5ff}
+.ai-loading.is-math{background:#f3f8f4}
+
+/* 第一部分预览卡片：点击后渐变展开完整讲解 */
+.lesson-preview-cta{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:4px;
+  width:100%;
+  margin-top:18px;
+  padding:16px 18px;
+  border:1px dashed #d8d2ea;
+  border-radius:14px;
+  background:linear-gradient(180deg,#fbfaff 0%,#f3f0fb 100%);
+  color:inherit;
+  cursor:pointer;
+  text-align:left;
+  transition:border-color .2s ease, box-shadow .2s ease, transform .2s ease, opacity .25s ease, max-height .3s ease, margin .3s ease, padding .3s ease;
+}
+.lesson-preview-cta:hover{
+  border-color:#8b6fe0;
+  border-style:solid;
+  box-shadow:0 8px 24px rgba(91,63,168,.1);
+  transform:translateY(-1px);
+}
+.lesson-preview-kicker{
+  font-size:10px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:#9a92b5;
+}
+.lesson-preview-cta strong{
+  font-size:16px;
+  font-weight:650;
+  color:#5b3fa8;
+}
+.lesson-preview-cta small{
+  font-size:12px;
+  color:#7a7192;
+}
+.lesson-reveal-more{
+  display:grid;
+  grid-template-rows:0fr;
+  opacity:0;
+  transform:translateY(16px);
+  pointer-events:none;
+  transition:grid-template-rows .55s ease, opacity .45s ease .05s, transform .5s ease;
+}
+.lesson-reveal-more-inner{overflow:hidden;min-height:0}
+.lesson-reveal-frame[data-view="full"] .lesson-reveal-more{
+  grid-template-rows:1fr;
+  opacity:1;
+  transform:none;
+  pointer-events:auto;
+}
+.lesson-reveal-frame[data-view="full"] .lesson-preview-cta{
+  opacity:0;
+  max-height:0;
+  margin-top:0;
+  margin-bottom:0;
+  padding-top:0;
+  padding-bottom:0;
+  border-width:0;
+  overflow:hidden;
+  pointer-events:none;
+}
+.lesson-reveal-frame[data-view="preview"] .content-card:first-child{
+  box-shadow:0 10px 28px rgba(43,39,64,.06);
+}
+
+.lesson-preview-cta.is-waiting{
+  cursor:default;
+  opacity:.95;
+  border-style:dashed;
+}
+.lesson-preview-cta.is-waiting:hover{
+  transform:none;
+  box-shadow:none;
+  border-style:dashed;
+}
+.lesson-preview-cta.is-ready{
+  border-style:solid;
+  border-color:#8b6fe0;
+  animation:chip-pop .45s ease, preview-ready-glow 1.6s ease 2;
+}
+@keyframes preview-ready-glow{
+  0%,100%{box-shadow:0 0 0 0 rgba(139,111,224,0)}
+  50%{box-shadow:0 8px 24px rgba(91,63,168,.16)}
+}
+.lesson-reveal-frame.is-fading{
+  opacity:0;
+  transform:translateY(8px);
+  transition:opacity .18s ease, transform .18s ease;
+}
+.lesson-detail-enter{
+  opacity:0;
+  transform:translateY(14px);
+}
+.lesson-detail-enter.is-in{
+  opacity:1;
+  transform:none;
+  transition:opacity .45s ease, transform .5s ease;
+}
+
+/* knowledge-card speech guide */
+.card-heading-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.grammar-head .head-actions{display:flex;align-items:center;gap:8px}
+.content-card.is-speaking,
+.mnemonic.is-speaking,
+.challenge-card.is-speaking,
+.insight-card.is-speaking,
+.grammar-card.is-speaking,
+.idiom-card.is-speaking,
+.step.is-speaking{
+  box-shadow:0 0 0 2px rgba(117,104,216,.32);
+  transition:box-shadow .25s ease;
+}
+.audio-button.is-speaking,
+.speech-play.is-speaking{
+  background:var(--purple-soft);
+  color:var(--purple-dark);
+  animation:speech-pulse 1.15s ease-in-out infinite;
+}
+@keyframes speech-pulse{
+  50%{transform:scale(1.08)}
+}
+.mnemonic .audio-button,
+.challenge-card .audio-button{
+  background:rgba(255,255,255,.14);
+  color:#fff;
+  border-color:rgba(255,255,255,.22);
+  margin-left:auto;
+  flex:none;
+}
+.challenge-card .audio-button.is-speaking,
+.mnemonic .audio-button.is-speaking{
+  background:#f2cb58;
+  color:#4e411b;
+}
+.step[data-speech-item]{cursor:pointer}
+.grammar-card[data-speech-item]{cursor:pointer}
+
+/* 互动讲解区域的朗读按钮：放在横幅右上角，不挡住标题 */
+.topic-banner .audio-button{
+  position:absolute;
+  top:14px;
+  right:14px;
+  z-index:3;
+}
+.topic-banner .audio-button.is-speaking{
+  box-shadow:0 0 0 3px rgba(124,92,252,.28);
+}

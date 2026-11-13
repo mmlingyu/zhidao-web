@@ -12,10 +12,12 @@
  * 离线引擎不可用（模型缺失 / 浏览器不支持 WebGPU 与 WASM）时自动切到本地服务，
  * 服务也不可用时切回浏览器默认音色，任何一步都不会让朗读变成「点了没反应」。
  *
- * 音色可以**按学科**配置：语文 / 英语 / 数学各一个音色，默认英语用英文音色（af_maple），
- * 语文与数学用中文音色（zf_001）。朗读时先看当前学科，再看文本语种：
- *   英语课读英文例句 → 英语音色；英语课读中文讲解 → 回落中文音色（不让中文被英文音色念）。
- * 文本语种与学科不匹配时按语种回退，保证「读什么用什么口音」。
+ * 音色可以**按学科**配置：语文 / 英语 / 数学各一个音色，默认英语用英文音色（af_maple，Phonon），
+ * 语文与数学用中文音色（zf_001）。开读前先检测这段文本：
+ *   全部是英文（有拉丁字母、没有汉字）→ 英语音色；
+ *   只要出现汉字（纯中文或中英混合）→ 改走语文学科的语音配置。
+ * 不要按字符数量多数决，避免英语课导语夹了几句英文就被英文音色念半截中文。
+ * 开读前还会去掉填空符（下划线、方框、圆圈空位等），数字和运算符号予以保留。
  */
 (function (root) {
   'use strict';
@@ -91,18 +93,79 @@
     return family ? family.lang : '';
   }
 
+  /** 拉丁字母；数字和标点不参与判定。 */
+  const LATIN_RE = /[A-Za-z]/;
+
   /**
-   * 文本语种判定：纯拉丁字母 → 英文；含中日韩统一表意文字 → 中文；
-   * 中英混排时按字符数量多数决。英文例句与英文单词都会被判成英文。
+   * 朗读前检测文本是否包含汉字。算法与约定一致，逐字判断：
+   *   基本汉字 U+4E00–U+9FA5，扩展 A U+3400–U+4DBF。
+   * 有一个汉字即返回 true，用于决定走语文模型/音色还是英语 Phonon。
+   */
+  function containsChinese(text) {
+    const source = String(text == null ? '' : text);
+    for (const char of source) {
+      const code = char.codePointAt(0);
+      if ((code >= 0x4E00 && code <= 0x9FA5) || (code >= 0x3400 && code <= 0x4DBF)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * 开读前判定这段文本该走哪种语音配置（模型 + 音色）。
+   *   en — 全部是英文：有拉丁字母，且一个汉字都没有 → Phonon（af_* / bf_*）。
+   *   zh — 纯中文或中英混合（containsChinese 为真），以及只有数字/标点 → 语文配置。
    */
   function detectLang(text) {
     const source = String(text == null ? '' : text);
-    const cjk = source.match(/[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff]/g) || [];
-    const latin = source.match(/[a-zA-Z]/g) || [];
-    if (!cjk.length && !latin.length) return 'zh';
-    if (!cjk.length) return 'en';
-    if (!latin.length) return 'zh';
-    return latin.length > cjk.length ? 'en' : 'zh';
+    if (containsChinese(source)) return 'zh';
+    if (LATIN_RE.test(source)) return 'en';
+    return 'zh';
+  }
+
+  /** 是否整段都是英文（可以走英语 Phonon 音色）。 */
+  function isAllEnglish(text) {
+    return detectLang(text) === 'en';
+  }
+
+  /**
+   * 朗读前清洗文案：去掉填空符等会读错的符号（下划线、方框、圆圈空位、连续破折号），
+   * 保留中文、英文、数字，以及加减乘除、等号等运算符号。
+   * 只影响朗读内容，不改页面上显示的课文。
+   */
+  const FILL_IN_RE = /[_＿﹏﹍﹎﹋]+|[□■▢▣▤▥▦▧▨▩☐☑☒❍⬜⬛◽◾◻◼○●◯◎◦◉◐◑◒◓❑❒]+|[—–―─]{2,}|-{2,}/g;
+  const SPEAK_OPERATOR_RE = /[+\-*/×÷=≠≈≤≥±√∑∫%<＞＜＋－＊／＝⋅∙∓≦≧≅≡∶^π∞°∠⊥∥∩∪∈∉⊂⊃⊆⊇∀∃∂∆Δ∏∧∨¬∼∽∝∵∴′″‰‱∛∜−－()[\]（）【】｛｝{}]/;
+  const SPEAK_PUNCT_RE = /[，。？！、；：,.?!;:'"“”‘’《》〈〉·…—–．，''`／/]/;
+
+  function keepSpeakChar(ch) {
+    const code = ch.codePointAt(0);
+    if ((code >= 0x4E00 && code <= 0x9FA5) || (code >= 0x3400 && code <= 0x4DBF)) return true;
+    if ((code >= 0x41 && code <= 0x5A) || (code >= 0x61 && code <= 0x7A)) return true;
+    if (code >= 0xC0 && code <= 0x24F) return true;
+    if (code >= 0x30 && code <= 0x39) return true;
+    if (code >= 0xFF10 && code <= 0xFF19) return true;
+    if (/\s/.test(ch)) return true;
+    if (SPEAK_OPERATOR_RE.test(ch) || SPEAK_PUNCT_RE.test(ch)) return true;
+    return false;
+  }
+
+  function prepareSpeakText(text) {
+    let source = String(text == null ? '' : text);
+    const before = source;
+    source = source.replace(FILL_IN_RE, ' ');
+    let out = '';
+    for (const ch of source) {
+      out += keepSpeakChar(ch) ? ch : ' ';
+    }
+    out = out.replace(/\s+/g, ' ').trim();
+    if (out !== String(before).replace(/\s+/g, ' ').trim()) {
+      console.log('[tts-filter] 朗读已去掉填空符，数字和运算符号已保留', {
+        before: before.slice(0, 120),
+        after: out.slice(0, 120)
+      });
+    }
+    return out;
   }
 
   function groupVoices(ids) {
@@ -222,14 +285,16 @@
 
   /**
    * 解析一次朗读该用哪个音色。
-   * 优先级：学科专用音色（语种要对）→ 默认音色（语种要对）→ 其它语种匹配的学科音色。
-   * 槽位为 'auto' 表示跟随默认音色；语种对不上时按文本语种回落，
-   * 避免「英语课读中文却用英文音色念」这类别扭结果。
+   * 先按 detectLang 看这段是「全部英文」还是「中文/中英混合」，再选槽位：
+   *   全部英文 → 当前学科（英语课即 Phonon / af_maple）；
+   *   中文或中英混合 → 语文学科的语音配置（槽位为 auto 则跟随默认中文音色）。
+   * 优先级：对应槽位（语种要对）→ 默认音色（语种要对）→ 其它语种匹配的学科音色。
    */
   function resolveVoice(text, subject) {
     const lang = detectLang(text);
     const slots = settings.subjectVoices || {};
-    const key = SUBJECTS[subject] ? subject : '';
+    // 中英混合或纯中文：改走语文学科配置；全部英文才用英语课的 Phonon 音色。
+    const key = lang === 'zh' ? 'chinese' : (SUBJECTS[subject] ? subject : '');
     const slot = key ? slots[key] : '';
     const usable = id => typeof id === 'string' && id !== AUTO && VOICE_ID.test(id);
     if (usable(slot) && voiceLang(slot) === lang) return slot;
@@ -238,6 +303,38 @@
       if (usable(slots[other]) && voiceLang(slots[other]) === lang) return slots[other];
     }
     return usable(slot) ? slot : settings.voice;
+  }
+
+  function usableVoice(id) {
+    return typeof id === 'string' && id !== AUTO && VOICE_ID.test(id);
+  }
+
+  /** 语文学科当前生效的中文音色，供中英混合时替换 Phonon。 */
+  function chineseVoiceId() {
+    const slots = settings.subjectVoices || {};
+    const slot = slots.chinese;
+    if (usableVoice(slot) && voiceLang(slot) === 'zh') return slot;
+    if (usableVoice(settings.voice) && voiceLang(settings.voice) === 'zh') return settings.voice;
+    for (const other of SUBJECT_KEYS) {
+      if (usableVoice(slots[other]) && voiceLang(slots[other]) === 'zh') return slots[other];
+    }
+    return 'zf_001';
+  }
+
+  /**
+   * 开读前先 containsChinese，再选定模型与音色。
+   * 英文音色（Phonon / af_* / bf_*）不能处理汉字：只要有汉字，
+   * 即使调用方强制指定了英语音色，也改走语文配置。
+   */
+  function voiceForSpeech(text, subject, forced) {
+    if (containsChinese(text) || detectLang(text) === 'zh') {
+      if (forced && usableVoice(forced) && voiceLang(forced) !== 'en') return forced;
+      return chineseVoiceId();
+    }
+    if (forced && usableVoice(forced)) return forced;
+    const preferred = resolveVoice(text, subject);
+    if (voiceLang(preferred) === 'en' || usableVoice(preferred)) return preferred;
+    return preferred;
   }
 
   function status() {
@@ -387,7 +484,7 @@
       return false;
     }
     const utterance = new Utterance(text);
-    // 语种判定与 TTS 路径共用 detectLang：读什么用什么口音，中英混排按多数决。
+    // 语种判定与 TTS 路径共用 detectLang：有汉字就用中文引擎，纯英文才用英语。
     utterance.lang = detectLang(text) === 'en' ? 'en-US' : 'zh-CN';
     utterance.rate = 0.86;
     const mascot = deps.mascot();
@@ -519,12 +616,28 @@
       engine = await ensureOfflineEngine();
     } catch { return false; }
     let result;
+    let usedVoice = voiceId || settings.voice;
+    if (containsChinese(text) && voiceLang(usedVoice) === 'en') {
+      usedVoice = chineseVoiceId();
+    }
     try {
-      result = await engine.synthesize(text, { voice: voiceId || settings.voice, speed: settings.speed });
+      result = await engine.synthesize(text, { voice: usedVoice, speed: settings.speed });
     } catch (error) {
-      offline.error = String((error && error.message) || error);
-      emit();
-      return false;
+      // Phonon 等英文音色遇到汉字会抛错：立刻换语文音色再试一次。
+      if (containsChinese(text) && voiceLang(usedVoice) === 'en') {
+        try {
+          usedVoice = chineseVoiceId();
+          result = await engine.synthesize(text, { voice: usedVoice, speed: settings.speed });
+        } catch (retryError) {
+          offline.error = String((retryError && retryError.message) || retryError);
+          emit();
+          return false;
+        }
+      } else {
+        offline.error = String((error && error.message) || error);
+        emit();
+        return false;
+      }
     }
     const samples = result && result.samples;
     const sampleRate = Number(result && result.sampleRate) || 24000;
@@ -573,6 +686,40 @@
     return '';
   }
 
+
+  /** 在用户点击「开始讲解」的手势里预热音频，这样第一部分出来时才能自动开讲。 */
+  function prepare() {
+    try {
+      const Ctor = deps.audioContext();
+      if (Ctor) {
+        const ctx = offline.ctx || (offline.ctx = new Ctor());
+        if (ctx.state === 'suspended' && typeof ctx.resume === 'function') {
+          ctx.resume().catch(() => {});
+        }
+        try {
+          const buffer = ctx.createBuffer(1, 1, 22050);
+          const source = ctx.createBufferSource();
+          source.buffer = buffer;
+          source.connect(ctx.destination);
+          source.start();
+        } catch { /* 静音解锁失败不影响后续朗读 */ }
+      }
+    } catch { /* AudioContext 不可用时走浏览器朗读 */ }
+    try {
+      const synth = deps.speechSynthesis();
+      const Utterance = deps.SpeechSynthesisUtterance();
+      if (synth && typeof synth.resume === 'function') synth.resume();
+      if (synth && Utterance) {
+        const utterance = new Utterance(' ');
+        utterance.volume = 0;
+        utterance.rate = 2;
+        synth.speak(utterance);
+      }
+    } catch { /* 浏览器语音预热失败可忽略 */ }
+    if (settings.mode === 'offline') ensureOfflineEngine().catch(() => {});
+    return true;
+  }
+
   /**
    * 全局朗读入口。返回 Promise<boolean>：
    * 离线引擎 → 本地服务 → 浏览器默认，逐级回退，任何一步失败都不会「点了没反应」。
@@ -580,13 +727,14 @@
    */
   async function speak(value, opts) {
     const options = opts || {};
-    const text = String(value == null ? '' : value);
+    const text = prepareSpeakText(value);
     if (!text.trim()) return false;
     stop({ quiet: true });
     const token = beginSpeech(text);
     const subject = SUBJECTS[options.subject] ? options.subject : currentSubject;
     const forced = options.voice && options.voice !== AUTO ? options.voice : '';
-    const preferred = forced || resolveVoice(text, subject);
+    // 先清洗填空符，再逐字检测是否含中文，决定模型与音色：有汉字绝不用 Phonon。
+    const preferred = voiceForSpeech(text, subject, forced);
     const voiceId = pickAvailable(preferred) || preferred;
 
     // 1) 离线引擎（默认）：模型与音色都在本机浏览器里，不依赖任何服务。
@@ -634,10 +782,10 @@
     DEFAULT_BASE, STORE_KEY, BUILTIN_VOICES: BUILTIN_VOICES.slice(),
     SUBJECTS, SUBJECT_KEYS, DEFAULT_SUBJECT_VOICES, MODES,
     classifyVoice, groupVoices, groupsForLang, normalize,
-    detectLang, voiceLang, resolveVoice, pickAvailable,
+    detectLang, containsChinese, isAllEnglish, prepareSpeakText, voiceLang, resolveVoice, voiceForSpeech, chineseVoiceId, pickAvailable,
     status, refresh, probe, configure, onChange, setDeps, setSubject,
     offlineStatus, effectiveMode, ensureOfflineEngine, resetOffline,
-    speak, stop, speakBrowser, speakRemote, speakOffline
+    speak, stop, prepare, speakBrowser, speakRemote, speakOffline
   };
   if (isNode) module.exports = API;
   if (root) root.ZhidaoVoice = API;

@@ -84,7 +84,8 @@ const state = {
   topic: 'chinese', idiomFilter: 'all', selectedIdiom: '眉开眼笑', practiceWord: '眉开眼笑',
   quizIndex: 0, quizScore: 0, quizAnswered: false, quizDone: [], showEnglishTip: false,
   mathLevel: 0, mathProgress: [2, 1, 1], challengeVisible: false,
-  favorites: readStorage('zhidao-favorites', []), history: readStorage('zhidao-history', [])
+  favorites: readStorage('zhidao-favorites', []), history: readStorage('zhidao-history', []),
+  detectLocked: false, lessonView: 'preview'
 };
 
 function readStorage(key, fallback) {
@@ -114,6 +115,7 @@ function resolveLesson(value) {
 }
 
 function updateDetection() {
+  if (state.detectLocked) return;
   const result = detectSubject($('#topic-input').value);
   const chip = $('#detect-chip');
   chip.className = `detect-chip ${result.cls}`;
@@ -199,8 +201,11 @@ function checkWriting() {
 }
 
 function renderEnglish() {
-  const quiz = quizData[state.quizIndex];
-  const sentence = quiz.sentence.replace('___', '<span>___</span>');
+  const quiz = quizData[state.quizIndex] || {};
+  const quizView = (typeof ZHIDAO_QUIZ !== 'undefined') ? ZHIDAO_QUIZ.normalizeQuiz(quiz) : { sentence: quiz.sentence || '请选择更合适的表达', cn: quiz.cn || '' };
+  const sentence = (typeof ZHIDAO_QUIZ !== 'undefined')
+    ? ZHIDAO_QUIZ.highlightBlanks(String(quizView.sentence).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'))
+    : String(quizView.sentence || '').replace('___', '<span>___</span>');
   $('#lesson-content').innerHTML = renderTopicBanner('english') + `
     <div class="mnemonic"><span class="mnemonic-label">口诀记</span><p>多人完成常用 <b>play</b>，一人完成常用 <b>do</b>，见到 <b>doing</b> 就用 <b>go</b>。</p><small>先记场景，再记规则</small></div>
     <div class="lesson-body"><section class="content-card"><div class="card-heading"><div class="card-title"><span class="number">01</span><div><h4>漫画场景学 <small>三位“活动盟主”各管什么？</small></h4></div></div></div>
@@ -211,7 +216,7 @@ function renderEnglish() {
       </div>
     </section>
     <section class="content-card" style="margin-top:16px"><div class="card-heading"><div class="card-title"><span class="number">02</span><div><h4>你来判一判 <small>选对搭配，马上理解</small></h4></div></div><span class="section-kicker" id="quiz-score">本轮答对 ${state.quizScore} 题</span></div>
-      <div class="quiz-layout"><div class="quiz-question"><span class="question-label">QUICK PRACTICE · ${state.quizIndex + 1}/${quizData.length}</span><h4>${sentence}</h4><p>${quiz.cn}</p></div>
+      <div class="quiz-layout"><div class="quiz-question"><span class="question-label">QUICK PRACTICE · ${state.quizIndex + 1}/${quizData.length}</span><h4>${sentence}</h4><p>${quizView.cn || quiz.cn || ''}</p></div>
       <div><div class="choice-row">${['play','do','go'].map(word => `<button class="choice-button" data-answer="${word}" ${state.quizAnswered ? 'disabled' : ''}>${word}<small>选择这个搭配</small></button>`).join('')}</div>
       <div class="quiz-feedback" id="quiz-feedback">${state.quizAnswered ? `<strong>回答正确！</strong> ${quiz.explain}` : '凭直觉先选一次，再看看场景规则。'}</div>
       <div class="quiz-meta"><div class="quiz-dots">${quizData.map((_,i) => `<i class="${state.quizDone.includes(i) ? 'done' : i === state.quizIndex ? 'active' : ''}"></i>`).join('')}</div><button class="text-button" id="quiz-next" ${state.quizAnswered ? '' : 'hidden'}>下一题${icon('arrow')}</button></div></div></div>
@@ -409,29 +414,71 @@ function showUnknown(value) {
  * voice.js 未加载时保留最小可用的浏览器朗读，避免单个静态资源 404 让页面哑掉。 */
 function speakText(value, opts) {
   const text = String(value || '');
-  if (!text.trim()) return false;
+  const options = opts || {};
+  const done = () => { if (typeof options.onDone === 'function') options.onDone(); };
+  if (!text.trim()) { done(); return false; }
   const voice = window.ZhidaoVoice;
   if (voice && typeof voice.speak === 'function') {
-    voice.speak(text, opts).catch(() => {});
-    return true;
+    const pending = voice.speak(text, options);
+    pending.catch(() => {}).finally(done);
+    return pending;
   }
-  if (!('speechSynthesis' in window)) { showToast('当前浏览器暂不支持朗读'); return false; }
+  if (!('speechSynthesis' in window)) { showToast('当前浏览器暂不支持朗读'); done(); return false; }
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
   // 依据朗读文本本身判断语种：英文例句用英文语音，中文成语与诗句用中文语音。
   utterance.lang = /[a-zA-Z]/.test(text) && !/[\u4e00-\u9fa5]/.test(text) ? 'en-US' : 'zh-CN';
   utterance.rate = .86;
+  utterance.onend = done;
+  utterance.onerror = done;
   window.speechSynthesis.speak(utterance);
   showToast('正在朗读，知知会跟着一起说');
   return true;
 }
 
+let speechDelegated = false;
 function bindSpeech() {
-  $$('[data-speak]').forEach(button => button.addEventListener('click', event => {
-    event.stopPropagation();
-    speakText(button.dataset.speak || '');
-  }));
+  if (speechDelegated) return;
+  speechDelegated = true;
+  // 事件委托：课程重渲染后不用再绑一遍，点喇叭、点模块、点小卡片都能读。
+  document.addEventListener('click', event => {
+    const speakBtn = event.target.closest('[data-speak]');
+    if (speakBtn && speakBtn.dataset.speak != null) {
+      event.preventDefault();
+      event.stopPropagation();
+      const line = speakBtn.dataset.speak || '';
+      if (typeof window.speakGuide === 'function') {
+        window.speakGuide(line, { key: 'attr:' + line, host: speakBtn.closest('.content-card, .grammar-card, .idiom-card, .mnemonic, .challenge-card, .step, article, section') || speakBtn });
+      } else {
+        speakText(line);
+      }
+      return;
+    }
+    const playBtn = event.target.closest('[data-speech-play]');
+    if (playBtn && typeof window.speakLessonKey === 'function') {
+      event.preventDefault();
+      event.stopPropagation();
+      const card = playBtn.closest('[data-speech-key], [data-speech-item], .content-card, .mnemonic, .challenge-card');
+      window.speakLessonKey(playBtn.dataset.speechPlay, { host: card });
+      return;
+    }
+    const item = event.target.closest('[data-speech-item]');
+    if (item && typeof window.speakLessonKey === 'function' && !event.target.closest('[data-ai-idiom], [data-ai-answer], [data-ai-filter], [data-ai-level], [data-speak], [data-speech-play], a, input, textarea, select')) {
+      // 预览里的成语卡本身就是 button；完整讲解的成语卡由 data-ai-idiom 处理器朗读，避免点一次读两遍又被停掉。
+      const nested = event.target.closest('button');
+      if (!nested || nested === item) {
+        window.speakLessonKey(item.dataset.speechItem, { host: item });
+      }
+      return;
+    }
+    const heading = event.target.closest('.card-heading, .solution-intro');
+    const section = heading && heading.closest('[data-speech-key]');
+    if (section && typeof window.speakLessonKey === 'function' && !event.target.closest('button, a, input, textarea, select')) {
+      window.speakLessonKey(section.dataset.speechKey, { host: section });
+    }
+  });
 }
+
 window.speakText = speakText;
 function closeSidebar() { $('#sidebar').classList.remove('open'); $('#sidebar-mask').classList.remove('show'); }
 

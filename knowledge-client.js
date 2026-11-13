@@ -28,6 +28,17 @@ const KNOWLEDGE = (() => {
   const esc = value => String(value ?? '').replace(/[&<>'"]/g, ch =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[ch]));
 
+
+  function apiUrl(path) {
+    const fallback = () => {
+      const base = String(window.ZHIDAO_API_BASE || '').trim().replace(/\/$/, '');
+      return base + path;
+    };
+    try {
+      if (typeof window.ZHIDAO_API_URL === 'function') return window.ZHIDAO_API_URL(path);
+    } catch { /* 旧页面可能把这个名字占成别的值，走同源拼接 */ }
+    return fallback();
+  }
   function sessionToken() {
     try { return localStorage.getItem('zhidao.session.token') || ''; } catch { return ''; }
   }
@@ -36,7 +47,7 @@ const KNOWLEDGE = (() => {
     const token = sessionToken();
     const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
     if (token) headers.Authorization = `Bearer ${token}`;
-    const response = await fetch(window.ZHIDAO_API_URL(path), { ...options, headers });
+    const response = await fetch(apiUrl(path), { ...options, headers });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error || '操作失败，请稍后再试');
     return data;
@@ -267,8 +278,8 @@ const KNOWLEDGE = (() => {
           <div class="zk-card-foot">
             <div class="zk-ring" style="--pct:${mastery}"><span>${mastery}</span></div>
             <div class="zk-card-meta"><small>${esc(when)}</small><span>答对 ${Number(card.correctCount || 0)} 次</span></div>
+            <button type="button" class="zk-continue" data-zk-continue="${esc(card.title || card.point)}">继续学习</button>
           </div>
-          <span class="zk-flip-hint">点一下看细节</span>
         </div>
         <div class="zk-card-face zk-card-back">
           <h4>${esc(card.title || card.point)}</h4>
@@ -276,6 +287,7 @@ const KNOWLEDGE = (() => {
             `<div class="zk-tl-item"><i></i><span>${esc(item.meta || EVIDENCE_LABEL[item.type] || item.type)}</span>
               <small>${new Date(item.at).toLocaleDateString('zh-CN')}</small></div>`).join('') : '<p class="zk-tl-empty">还没有学习记录</p>'}</div>
           <div class="zk-card-actions">
+            <button type="button" class="zk-continue" data-zk-continue="${esc(card.title || card.point)}">继续学习</button>
             <button class="zk-mark" data-zk-mark="1" data-zk-id="${esc(card.id)}">我确认他掌握了</button>
             <button class="zk-mark ghost" data-zk-mark="0" data-zk-id="${esc(card.id)}">还需练习</button>
           </div>
@@ -284,12 +296,45 @@ const KNOWLEDGE = (() => {
     </article>`;
   }
 
+  /** 关闭知识库，打开首页该知识点的讲解详情（有缓存则秒开）。 */
+  function continueLearning(topic) {
+    const query = String(topic || '').trim();
+    if (!query) return;
+    const input = document.getElementById('topic-input');
+    if (input) {
+      input.value = query;
+      if (typeof updateDetection === 'function') {
+        try { updateDetection(); } catch { /* noop */ }
+      }
+    }
+    close();
+    if (typeof closeSidebar === 'function') {
+      try { closeSidebar(); } catch { /* noop */ }
+    }
+    const start = (typeof window !== 'undefined' && typeof window.startLesson === 'function')
+      ? window.startLesson
+      : (typeof startLesson === 'function' ? startLesson : null);
+    if (start) start();
+    else if (window.showToast) window.showToast('请在首页搜索框打开这节讲解');
+    const section = document.getElementById('lesson-section');
+    if (section) {
+      try { section.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch { /* noop */ }
+    }
+  }
+
   function bindCards(body) {
     body.querySelectorAll('[data-zk-card]').forEach(card => {
       card.addEventListener('click', event => {
-        if (event.target.closest('[data-zk-mark]')) return;
+        if (event.target.closest('[data-zk-mark], [data-zk-continue]')) return;
         card.classList.toggle('flipped');
         if (window.ZHIDAO_FEEDBACK) window.ZHIDAO_FEEDBACK.flip();
+      });
+    });
+    body.querySelectorAll('[data-zk-continue]').forEach(button => {
+      button.addEventListener('click', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        continueLearning(button.dataset.zkContinue);
       });
     });
     body.querySelectorAll('[data-zk-mark]').forEach(button => {

@@ -6,7 +6,7 @@
  *  - 人脸模型与 wasm 体积大且内容不变：网络优先读取，离线时回退本地缓存（只缓存 2xx）。
  */
 // v16：修正 /tts/ 大文件入缓存的判断（依赖 Content-Length，缺长度则跳过）。
-const CACHE = 'zhidao-shell-v17-split';
+const CACHE = 'zhidao-shell-v21-api-url';
 const PRECACHE = [
   '/',
   '/config.js',
@@ -19,6 +19,7 @@ const PRECACHE = [
   '/feedback.js',
   '/learner.js',
   '/knowledge-client.js',
+  '/quiz-display.js',
   '/a2ui-catalog.js',
   '/a2ui-matrix.js',
   '/a2ui-question-map.js',
@@ -27,6 +28,7 @@ const PRECACHE = [
   '/a2ui-p4c.js',
   '/a2ui-p4d.js',
   '/a2ui-games.js',
+  '/a2ui-validate.js',
   '/a2ui-compiler.js',
   '/a2ui-render.js',
   '/a2ui-play.js',
