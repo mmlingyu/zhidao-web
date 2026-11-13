@@ -6,6 +6,42 @@
 if (typeof self.window === 'undefined') self.window = self;
 
 const ENGINE_URL = new URL('./kokoro-tts.js?v=20261113pre', import.meta.url);
+let modelFetches = 0;
+const modelFetchUrls = [];
+const onnxLoads = new Map();
+const nativeFetch = self.fetch.bind(self);
+function onnxKey(url) {
+  return String(url || '').split('#')[0].split('?')[0];
+}
+self.fetch = (input, init) => {
+  const url = typeof input === 'string' ? input : String((input && input.url) || input || '');
+  if (!/\.onnx(?:$|[?#])/.test(url)) return nativeFetch(input, init);
+  const key = onnxKey(url);
+  const existing = onnxLoads.get(key);
+  if (existing) return existing.blob.then(blob => new Response(blob, {
+    status: 200,
+    headers: { 'content-type': 'application/octet-stream', 'content-length': String(blob.size) }
+  }));
+  modelFetches += 1;
+  if (modelFetchUrls.length < 8) modelFetchUrls.push(key.split('/').slice(-3).join('/'));
+  let resolveBlob;
+  let rejectBlob;
+  const blob = new Promise((resolve, reject) => { resolveBlob = resolve; rejectBlob = reject; });
+  onnxLoads.set(key, { blob });
+  return nativeFetch(input, init).then(response => {
+    if (!response.ok || !response.body) throw new Error('语音模型请求失败 ' + response.status);
+    const copies = response.body.tee();
+    new Response(copies[1]).blob().then(resolveBlob, error => {
+      onnxLoads.delete(key);
+      rejectBlob(error);
+    });
+    return new Response(copies[0], { status: response.status, headers: response.headers });
+  }).catch(error => {
+    onnxLoads.delete(key);
+    rejectBlob(error);
+    throw error;
+  });
+};
 
 let enginePromise = null;
 let loadPromise = null;
@@ -22,7 +58,7 @@ function flushStatus() {
 
 function postStatus(snapshot, force) {
   if (!snapshot) return;
-  pendingStatus = snapshot;
+  pendingStatus = { ...snapshot, modelFetches, modelFetchUrls: modelFetchUrls.slice() };
   if (force) {
     if (statusTimer) { clearTimeout(statusTimer); statusTimer = null; }
     flushStatus();

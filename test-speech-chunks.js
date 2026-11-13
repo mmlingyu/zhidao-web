@@ -55,7 +55,11 @@ test('空文本没有分段', () => {
 test('默认仍是离线，引擎走页面外的客户端', () => {
   const source = fs.readFileSync('voice.js', 'utf8');
   assert.match(source, /mode: 'offline'/);
-  assert.match(source, /offline-client\.js\?v=20261113resp/);
+  assert.match(source, /offline-client\.js\?v=20261113ver2/);
+  assert.doesNotMatch(source, /kokoro-tts\.js/);
+  const client = fs.readFileSync('public/tts/offline-client.js', 'utf8');
+  assert.match(client, /WorkerUnavailable/);
+  assert.doesNotMatch(client, /kokoro-tts\.js/);
   assert.match(source, /af_maple/);
   assert.match(source, /zf_001/);
   assert.equal(V.status().mode, 'offline');

@@ -228,7 +228,7 @@
     // 离线引擎异步加载：页面空闲时预热，点读复用相同任务，之后浏览器缓存。
     loadOfflineEngine: async () => {
       if (typeof document === 'undefined') throw new Error('离线语音引擎只能在浏览器里运行');
-      const mod = await import('/tts/offline-client.js?v=20261113resp');
+      const mod = await import('/tts/offline-client.js?v=20261113ver2');
       const engine = (mod && (mod.default || mod)) || (root && root.ZhidaoTTS);
       if (!engine || typeof engine.synthesize !== 'function') throw new Error('离线语音引擎加载失败');
       return engine;
@@ -457,6 +457,10 @@
   /** 外部中断（P4c 的 stopVoice 等）：远程音频与浏览器语音一起停，口型回 idle。 */
   function stop(opts) {
     speechEpoch += 1;
+    if (offline.preparing) {
+      offline.preparing = false;
+      emit();
+    }
     const options = opts || {};
     const c = current;
     if (c) {
@@ -751,10 +755,27 @@
       }
     };
     const alive = () => !aborted && current === session && epoch === speechEpoch;
+    let playbackSettled = false;
+    let resolvePlayback = () => {};
+    const playbackDone = new Promise(resolve => { resolvePlayback = resolve; });
+    const finishPlayback = (value) => {
+      if (playbackSettled) return;
+      playbackSettled = true;
+      resolvePlayback(value);
+    };
+    const cancelSynth = session.cancel;
+    session.cancel = () => {
+      cancelSynth();
+      finishPlayback(false);
+    };
     let engine;
     try {
       engine = await ensureOfflineEngine();
-    } catch { if (current === session) current = null; return false; }
+    } catch (error) {
+      if (current === session) current = null;
+      if (error && error.name === 'WorkerUnavailable') throw error;
+      return false;
+    }
     offline.engine = engine;
     if (!alive()) return false;
     let usedVoice = voiceId || settings.voice;
@@ -782,7 +803,10 @@
 
     const maybeFinish = () => {
       if (!alive()) return;
-      if (synthesisDone && ended >= scheduled) finish(token, true);
+      if (synthesisDone && ended >= scheduled) {
+        finish(token, true);
+        finishPlayback(true);
+      }
     };
     const armTicker = () => {
       if (session.ticker) return;
@@ -846,13 +870,17 @@
       try {
         result = await engine.synthesize(chunks[i], { voice: usedVoice, speed: settings.speed });
       } catch (error) {
-        if (error && error.name === 'AbortError') return started;
+        if (error && (error.name === 'AbortError' || error.name === 'WorkerUnavailable')) {
+        if (error.name === 'WorkerUnavailable') throw error;
+        return started;
+      }
         if (!started && containsChinese(text) && voiceLang(usedVoice) === 'en') {
           try {
             usedVoice = chineseVoiceId();
             result = await engine.synthesize(chunks[i], { voice: usedVoice, speed: settings.speed });
           } catch (retryError) {
             if (retryError && retryError.name === 'AbortError') return started;
+            if (retryError && retryError.name === 'WorkerUnavailable') throw retryError;
             offline.error = String((retryError && retryError.message) || retryError);
             emit();
             if (current === session) current = null;
@@ -878,7 +906,9 @@
     synthesisDone = true;
     if (!started) { if (current === session) current = null; return false; }
     maybeFinish();
-    return true;
+    // Keep the speak() promise pending until every scheduled chunk ends,
+    // so the same-section pause toggle still applies while later chunks play.
+    return playbackDone;
   }
 
   /** 学科音色不在服务清单里（例如服务升级后音色改名）→ 回落通用音色。 */
@@ -890,24 +920,30 @@
   }
 
 
-  /** 在用户点击「开始讲解」的手势里预热音频，这样第一部分出来时才能自动开讲。 */
-  function prepare() {
+  /** 必须在用户手势的同步调用栈里执行，后面的分句才能继续用同一个 AudioContext。 */
+  function unlockAudio() {
     try {
       const Ctor = deps.audioContext();
-      if (Ctor) {
-        const ctx = offline.ctx || (offline.ctx = new Ctor());
-        if (ctx.state === 'suspended' && typeof ctx.resume === 'function') {
-          ctx.resume().catch(() => {});
-        }
-        try {
-          const buffer = ctx.createBuffer(1, 1, 22050);
-          const source = ctx.createBufferSource();
-          source.buffer = buffer;
-          source.connect(ctx.destination);
-          source.start();
-        } catch { /* 静音解锁失败不影响后续朗读 */ }
+      if (!Ctor) return false;
+      const ctx = offline.ctx || (offline.ctx = new Ctor());
+      if (ctx.state === 'suspended' && typeof ctx.resume === 'function') {
+        ctx.resume().catch(() => {});
       }
-    } catch { /* AudioContext 不可用时走浏览器朗读 */ }
+      if (!offline.unlocked) {
+        const buffer = ctx.createBuffer(1, 1, 22050);
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        source.start();
+        offline.unlocked = true;
+      }
+      return true;
+    } catch { return false; }
+  }
+
+  /** 在用户点击「开始讲解」的手势里预热音频，这样第一部分出来时才能自动开讲。 */
+  function prepare() {
+    unlockAudio();
     try {
       const synth = deps.speechSynthesis();
       const Utterance = deps.SpeechSynthesisUtterance();
@@ -933,6 +969,7 @@
     const text = prepareSpeakText(value);
     if (!text.trim()) return false;
     stop({ quiet: true });
+    unlockAudio();
     const epoch = speechEpoch;
     const token = beginSpeech(text);
     const subject = SUBJECTS[options.subject] ? options.subject : currentSubject;
@@ -947,6 +984,14 @@
       emit();
       let ok;
       try { ok = await speakOffline(text, token, voiceId); }
+      catch (error) {
+        if (epoch !== speechEpoch) return false;
+        if (error && error.name === 'WorkerUnavailable') {
+          deps.toast('离线语音线程不可用，已改用浏览器朗读');
+          return speakBrowser(text, token);
+        }
+        throw error;
+      }
       finally {
         if (epoch === speechEpoch) { offline.preparing = false; emit(); }
       }
