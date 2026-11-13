@@ -1,6 +1,6 @@
 'use strict';
 const assert = require('node:assert/strict');
-const gate = require('./lesson-preview-gate.js');
+const gate = require('./public/tts/lesson-preview-gate.js');
 
 let passed = 0;
 function test(name, fn) {
