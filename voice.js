@@ -25,6 +25,9 @@
   const isNode = typeof module !== 'undefined' && !!module.exports;
   const DEFAULT_BASE = 'http://127.0.0.1:8880';
   const STORE_KEY = 'zhidao-voice-settings-v1';
+  // 离线模型「已经加载过」标记：成功加载过一次就落盘，
+  // 之后打开页面不再重复弹出「正在加载离线语音模型」进度卡片（预热仍静默进行）。
+  const OFFLINE_CACHED_KEY = 'zhidao-offline-model-cached-v1';
   const VOICE_ID = /^[a-z]{2}_[a-z0-9]+$/i;
 
   /** 学科 → 音色槽位。lang 决定该学科默认用哪种语言的音色；follow 表示可选「跟随默认音色」。 */
@@ -238,14 +241,28 @@
 
   /* 离线引擎状态：idle 未加载 / loading 加载中 / ready 可用 / failed 不可用。 */
   const offline = {
-    engine: null, loading: null, state: 'idle', error: '', device: '', progress: 0, loaded: 0, total: 0, stage: 'idle', preparing: false, ctx: null
+    engine: null, loading: null, state: 'idle', error: '', device: '', progress: 0, loaded: 0, total: 0, stage: 'idle', preparing: false, ctx: null,
+    cached: false
   };
+  offline.cached = readCachedFlag();
+
+  function readCachedFlag() {
+    try { return Boolean(deps.storage && deps.storage.getItem(OFFLINE_CACHED_KEY)); } catch { return false; }
+  }
+  function writeCachedFlag(value) {
+    try {
+      if (!deps.storage) return;
+      if (value) deps.storage.setItem(OFFLINE_CACHED_KEY, '1');
+      else deps.storage.removeItem(OFFLINE_CACHED_KEY);
+    } catch { /* 隐私模式下不落盘，本次会话仍生效 */ }
+  }
 
   function offlineStatus() {
     return {
       state: offline.state, error: offline.error, device: offline.device,
       progress: offline.progress, loaded: offline.loaded, total: offline.total,
-      stage: offline.stage, preparing: offline.preparing, ready: offline.state === 'ready'
+      stage: offline.stage, preparing: offline.preparing, ready: offline.state === 'ready',
+      cached: offline.cached
     };
   }
 
@@ -613,6 +630,8 @@
       if (typeof engine.load === 'function') await engine.load();
       offline.state = 'ready';
       offline.stage = 'ready';
+      // 成功就绪过一次即记住「已缓存」，后续打开页面不再弹加载卡片。
+      if (!offline.cached) { offline.cached = true; writeCachedFlag(true); }
       offline.loading = null;
       emit();
       return engine;
@@ -621,6 +640,9 @@
       offline.state = 'failed';
       offline.stage = 'failed';
       offline.error = String((error && error.message) || error);
+      // 加载失败说明缓存未必可靠，清掉标记，下次仍给出下载进度。
+      offline.cached = false;
+      writeCachedFlag(false);
       emit();
       throw error;
     });
