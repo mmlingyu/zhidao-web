@@ -1,21 +1,19 @@
 /* Main-thread facade for offline Kokoro.
- * Prefetch, manual speech and auto-guide share this module's one load promise
- * and one worker. Synthesis audio is received as a transferred Float32Array.
- * If the worker cannot start, calls fall back to the same bundle on the page
- * thread so speech still has a path. */
-const WORKER_URL = new URL('./kokoro-worker.js?v=20261113resp', import.meta.url);
-const BUNDLE_URL = new URL('./kokoro-tts.js?v=20261113pre', import.meta.url);
+ * Prefetch, manual speech and auto-guide share one worker and one load.
+ * Synthesis stays off the page thread. If the worker cannot start, this
+ * module refuses to import the ONNX bundle on the page: that would freeze
+ * the UI the same way as before. The caller uses browser speech instead. */
+const WORKER_URL = new URL('./kokoro-worker.js?v=20261113ver2', import.meta.url);
 
 const listeners = new Set();
 const pending = new Map();
 let worker = null;
 let workerFailed = false;
-let fallback = null;
 let loadPromise = null;
 let seq = 0;
 let snapshot = {
   ready: false, loading: false, error: '', device: '', progress: 0,
-  loaded: 0, total: 0, stage: 'idle', version: '1.0.0'
+  loaded: 0, total: 0, stage: 'idle', modelFetches: 0, version: '1.0.0'
 };
 
 function emit() {
@@ -39,6 +37,12 @@ function abortError() {
   return error;
 }
 
+function workerUnavailable(message) {
+  const error = new Error(message || '离线语音线程不可用');
+  error.name = 'WorkerUnavailable';
+  return error;
+}
+
 function applySnapshot(next) {
   if (!next || typeof next !== 'object') return;
   snapshot = {
@@ -47,7 +51,8 @@ function applySnapshot(next) {
     loading: Boolean(next.loading),
     progress: Number(next.progress) || 0,
     loaded: Number(next.loaded) || 0,
-    total: Number(next.total) || 0
+    total: Number(next.total) || 0,
+    modelFetches: Number(next.modelFetches) || snapshot.modelFetches || 0
   };
   emit();
 }
@@ -58,6 +63,17 @@ function settle(requestId, error, value) {
   pending.delete(requestId);
   if (error) item.reject(error);
   else item.resolve(value);
+}
+
+function failWorker(error) {
+  workerFailed = true;
+  const wrapped = error && error.name === 'WorkerUnavailable' ? error : workerUnavailable(error && error.message);
+  try { if (worker) worker.terminate(); } catch { /* already dead */ }
+  worker = null;
+  loadPromise = null;
+  for (const id of [...pending.keys()]) settle(id, wrapped);
+  snapshot = { ...snapshot, stage: 'failed', error: wrapped.message, loading: false, ready: false };
+  emit();
 }
 
 function ensureWorker() {
@@ -77,7 +93,7 @@ function ensureWorker() {
       return;
     }
     if (msg.type === 'loaded') {
-      applySnapshot(msg.snapshot || { ready: true, stage: 'ready', loading: false, progress: 100 });
+      applySnapshot({ ...(msg.snapshot || {}), ready: true, stage: 'ready', loading: false, progress: 100 });
       settle(msg.requestId, null, true);
       return;
     }
@@ -97,78 +113,61 @@ function ensureWorker() {
     if (msg.type === 'error') {
       const error = new Error(msg.message || '离线语音合成失败');
       if (!msg.requestId) {
-        workerFailed = true;
-        for (const id of [...pending.keys()]) settle(id, error);
+        failWorker(error);
         return;
       }
       settle(msg.requestId, error);
     }
   };
   worker.onerror = event => {
-    workerFailed = true;
-    const error = new Error((event && event.message) || '语音线程故障');
-    try { worker.terminate(); } catch { /* already dead */ }
-    worker = null;
-    loadPromise = null;
-    for (const id of [...pending.keys()]) settle(id, error);
-    snapshot = { ...snapshot, stage: 'failed', error: error.message, loading: false };
-    emit();
+    failWorker(workerUnavailable((event && event.message) || '语音线程故障'));
   };
   return worker;
 }
 
-async function loadFallback() {
-  if (fallback) return fallback;
-  const mod = await import(BUNDLE_URL);
-  fallback = (mod && (mod.default || mod)) || null;
-  if (!fallback || typeof fallback.synthesize !== 'function') throw new Error('离线语音引擎加载失败');
-  if (typeof fallback.onChange === 'function') fallback.onChange(next => applySnapshot(next));
-  return fallback;
-}
-
 function load() {
+  if (workerFailed) return Promise.reject(workerUnavailable(snapshot.error));
   if (loadPromise) return loadPromise;
   snapshot = { ...snapshot, loading: true, stage: snapshot.stage === 'ready' ? 'ready' : 'starting', error: '' };
   emit();
   loadPromise = (async () => {
     const thread = ensureWorker();
-    if (!thread) {
-      const engine = await loadFallback();
-      await engine.load();
-      applySnapshot(typeof engine.status === 'function' ? engine.status() : { ready: true, stage: 'ready', loading: false, progress: 100 });
-      return engine;
-    }
+    if (!thread) throw workerUnavailable();
     const requestId = ++seq;
     await new Promise((resolve, reject) => {
       pending.set(requestId, { resolve, reject, kind: 'load' });
-      thread.postMessage({ type: 'load', requestId });
+      try { thread.postMessage({ type: 'load', requestId }); }
+      catch (error) { pending.delete(requestId); reject(workerUnavailable(error && error.message)); }
     });
     return true;
   })().catch(error => {
     loadPromise = null;
-    snapshot = { ...snapshot, loading: false, stage: 'failed', error: String((error && error.message) || error) };
+    const wrapped = error && error.name === 'WorkerUnavailable' ? error : error;
+    snapshot = { ...snapshot, loading: false, stage: 'failed', error: String((wrapped && wrapped.message) || wrapped) };
     emit();
-    throw error;
+    throw wrapped;
   });
   return loadPromise;
 }
 
 async function synthesize(text, options = {}) {
+  if (workerFailed || typeof Worker === 'undefined') throw workerUnavailable(snapshot.error);
   await load();
-  const voice = options.voice;
-  const speed = options.speed;
-  if (workerFailed || !worker) {
-    const engine = await loadFallback();
-    return engine.synthesize(text, { voice, speed });
-  }
+  if (workerFailed || !worker) throw workerUnavailable(snapshot.error);
   const requestId = ++seq;
   return new Promise((resolve, reject) => {
     pending.set(requestId, { resolve, reject, kind: 'synthesize' });
     try {
-      worker.postMessage({ type: 'synthesize', requestId, text, voice, speed });
+      worker.postMessage({
+        type: 'synthesize',
+        requestId,
+        text,
+        voice: options.voice,
+        speed: options.speed
+      });
     } catch (error) {
       pending.delete(requestId);
-      reject(error);
+      reject(workerUnavailable(error && error.message));
     }
   });
 }
@@ -193,14 +192,16 @@ function reset() {
   }
   worker = null;
   workerFailed = false;
-  fallback = null;
   loadPromise = null;
   snapshot = {
     ready: false, loading: false, error: '', device: '', progress: 0,
-    loaded: 0, total: 0, stage: 'idle', version: '1.0.0'
+    loaded: 0, total: 0, stage: 'idle', modelFetches: 0, version: '1.0.0'
   };
   emit();
 }
 
-const API = { load, synthesize, status, onChange, cancelSynthesize, reset, MODEL_ID: 'onnx-community/Kokoro-82M-v1.1-zh-ONNX' };
+const API = {
+  load, synthesize, status, onChange, cancelSynthesize, reset,
+  MODEL_ID: 'onnx-community/Kokoro-82M-v1.1-zh-ONNX'
+};
 export default API;

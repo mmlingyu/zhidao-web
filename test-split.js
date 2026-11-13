@@ -13,8 +13,8 @@ for(const m of html.matchAll(/(?:src|href)="([^"?#]+)(?:\?[^\"]*)?"/g)) if(!m[1]
 for(const p of ['model/tiny_face_detector_model.bin','vendor/face-api.esm.js','tts/kokoro-tts.js','tts/kokoro-worker.js','tts/offline-client.js','tts/synth-queue.mjs','config.js','lesson-preview-gate.js','voice-progress.js']) assert.ok(fs.existsSync('dist/'+p),p);
 assert.match(html, /豫ICP备2026048965号-1/);
 assert.match(html, /https:\/\/beian\.miit\.gov\.cn\//);
-assert.match(html, /voice\.js\?v=20261113resp/);
-assert.match(html, /lesson-preview-gate\.js\?v=20261113resp/);
+assert.match(html, /voice\.js\?v=20261113ver2/);
+assert.match(html, /lesson-preview-gate\.js\?v=20261113ver/);
 assert.match(html, /dynamic\.js\?v=20261113resp/);
 assert.doesNotMatch(html, /Cross-Origin-Opener-Policy|Cross-Origin-Embedder-Policy/);
 assert.match(fs.readFileSync('dist/config.js','utf8'), /ZHIDAO_API_BASE = ''/);

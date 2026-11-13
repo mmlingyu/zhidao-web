@@ -22,10 +22,34 @@ test('英语导语成句后才通过预览门', () => {
   assert.equal(gate.previewReady(ready), true);
 });
 
-test('英语第一部分已经有词条时可以出卡', () => {
-  const payload = {
+test('英语导语没收句时，即使有词条或凑满字数也不出卡', () => {
+  const withItem = {
     subject: 'english',
     data: { bannerTitle: 'Run', description: 'short text', items: [{ word: 'sprint' }] }
+  };
+  const longFragment = {
+    subject: 'english',
+    data: { bannerTitle: 'Sprint', description: 'Sprint means to run very fast today' }
+  };
+  assert.equal(gate.previewReady(withItem), false);
+  assert.equal(gate.previewReady(longFragment), false);
+});
+
+test('显式 bannerFieldsClosed:false 或 fullEnglishPreview:false 挡住出卡', () => {
+  const data = { bannerTitle: 'Sprint', description: 'Sprint means to run very fast.' };
+  assert.equal(gate.previewReady({ subject: 'english', bannerFieldsClosed: false, data }), false);
+  assert.equal(gate.previewReady({ subject: 'english', fullEnglishPreview: false, data }), false);
+  assert.equal(gate.bannerFieldsClosed(data), true);
+});
+
+test('英语第一部分加上收句导语可以出卡', () => {
+  const payload = {
+    subject: 'english',
+    data: {
+      bannerTitle: 'Run',
+      description: 'A sprint is a short run.',
+      items: [{ word: 'sprint' }]
+    }
   };
   assert.equal(gate.previewReady(payload), true);
 });
